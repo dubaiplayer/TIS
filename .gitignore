@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Virtual environment
+.venv/
+venv/
+
+# Data & model artifacts — large and regenerable (see data_prep.py / classifier.py)
+data/
+models/
+
+# OS
+Thumbs.db
+.DS_Store

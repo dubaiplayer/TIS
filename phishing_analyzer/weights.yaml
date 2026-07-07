@@ -1,0 +1,36 @@
+# Risk combination weights & thresholds — EDIT THIS to tune the tool.
+# Overall risk = weighted average of attribute scores (each 0..1) and the
+# classifier probability. Weights are relative; they are normalized at runtime.
+
+# Per-attribute weights. Grounded in the Step-2 lift validation: financial/419,
+# credential-phrase, and reward signals validated strongest; curiosity/grammar
+# weakest on this corpus, so lower weights.
+attribute_weights:
+  urgency: 1.0
+  fear_threat: 1.1
+  reward: 1.0
+  curiosity: 0.5
+  authority: 0.9
+  financial: 1.5
+  credential: 1.6
+  generic_greeting: 0.9
+  sender_domain: 1.3
+  links: 1.2
+  grammar: 0.4
+  caps_tone: 0.6
+
+# CO-EQUAL ML: the classifier's weight ≈ the SUM of all attribute weights above
+# (~13), so rules and the model each contribute ~half of the risk score. Dial
+# this DOWN if Step-4 per-source metrics show the model riding source/campaign
+# leakage rather than genuine phishing signal.
+classifier_weight: 13.0
+
+# Verdict bands on the final 0..1 risk score.
+verdict_thresholds:
+  legitimate_below: 0.34    # < 0.34            -> "legitimate"
+  phishing_at_or_above: 0.67  # >= 0.67         -> "phishing"; between -> "suspicious"
+
+# Attributes whose absence should NOT lower confidence when uncomputable
+# (e.g. sender_domain when no sender header). Excluded from the denominator when
+# they report "unavailable".
+skip_when_unavailable: [sender_domain]
