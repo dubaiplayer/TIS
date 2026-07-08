@@ -91,10 +91,41 @@ product.
    link attribute focuses on shorteners/TLDs/IP-literals/raw-URL count. Live URL
    reputation is out of scope.
 
-## Scoring & combination (implemented in Step 3)
+## Scoring & combination (implemented in Step 3, tuned in Step 4)
 
 Each attribute maps its raw hit-count/ratio to a 0..1 score via a saturating
-function (diminishing returns; tuned per attribute). The overall risk score is an
-explicit, adjustable weighted blend of attribute scores + the classifier
-probability (weights in `weights.yaml`), with contributing signals always
-emitted. See `CLAUDE.md` → "Risk combination" for the co-equal-ML guardrails.
+function (diminishing returns; tuned per attribute). The overall risk score is a
+**noisy-OR** of independent signals: each casts a vote = reliability × score and
+`risk = 1 - Π(1 - vote)`, so any one confident signal (the classifier, or a
+strong attribute) can drive risk high while the many silent attributes leave it
+near 0. Reliabilities, a vote floor, and verdict bands live in `weights.yaml`.
+See `CLAUDE.md` → "Risk combination" for the co-equal-ML guardrails.
+
+## Step-4 validation findings (how the attributes actually behaved on test)
+
+Validated with no per-attribute ground truth via ROC-AUC + point-biserial
+correlation of each attribute score vs the real label, plus a 40-email spot-check
+(`reports/spotcheck.csv`). Key results:
+
+- **Rule attributes are precise but SPARSE.** Most fire on <16% of emails, so
+  their whole-test AUC sits near 0.5 (the silent 84%+ are 0-vs-0 ties) even though
+  `mean(phish) ≫ mean(legit)` when they fire (e.g. generic_greeting 23×). They are
+  **evidence features that explain the "why"**, not standalone classifiers — the
+  learned classifier carries the raw accuracy.
+- **grammar is UNRELIABLE on this corpus** (AUC ~0.47, anti-correlated): the
+  spellchecker flags Enron jargon/tickers (`hpl`, `ect`) as misspellings, so it
+  measures corporate vocabulary, not phishing. Kept for real-world value but at
+  **low reliability** (weights.yaml) and flagged here.
+- **caps_tone is NON-DISCRIMINATIVE here** (AUC ~0.48): corporate signatures carry
+  caps and Nigerian 419s are calm prose, so phish ≈ legit. Same treatment: kept,
+  low reliability, flagged.
+- **Combination was miscalibrated at first** (weighted mean drowned strong signals
+  — almost nothing reached the "phishing" verdict). Fixed by switching to noisy-OR
+  with a vote floor and a capped attribute reliability (a single rule attribute
+  tops out at "suspicious"; only the classifier or multiple attributes reach
+  "phishing"), then recalibrating the verdict bands.
+- **Leakage is real in the features but harmless in-distribution.** Per-source
+  false-positive rates are all <1% on this same-distribution test set; the
+  `enron`/`re:`/`thanks` leakage the coefficient audit exposed is an
+  out-of-distribution generalization risk this dataset cannot measure. Trust the
+  coefficient audit, not the reassuring test numbers.

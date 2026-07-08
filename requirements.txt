@@ -1,0 +1,15 @@
+# Python backend dependencies (data pipeline + classifier + API).
+# Install into the venv:  .venv/Scripts/python.exe -m pip install -r requirements.txt
+pandas
+numpy
+scikit-learn
+joblib
+pyarrow
+beautifulsoup4
+lxml
+pyyaml
+pyspellchecker
+pydantic
+fastapi
+uvicorn[standard]
+pytest

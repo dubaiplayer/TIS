@@ -1,0 +1,36 @@
+{
+  "name": "phishing-analyzer-desktop",
+  "version": "1.0.0",
+  "description": "Grammarly-style desktop app for phishing manipulation analysis",
+  "author": "TIS",
+  "main": "electron/main.cjs",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k -n vite,electron \"vite\" \"wait-on tcp:5173 && cross-env ELECTRON_DEV=1 electron .\"",
+    "build": "vite build",
+    "dist": "vite build && electron-builder"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "recharts": "^2.12.7"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "concurrently": "^9.0.1",
+    "cross-env": "^7.0.3",
+    "electron": "^32.1.2",
+    "electron-builder": "^25.0.5",
+    "vite": "^5.4.8",
+    "wait-on": "^8.0.1"
+  },
+  "build": {
+    "appId": "com.tis.phishing-analyzer",
+    "productName": "Phishing Analyzer",
+    "files": ["dist/**/*", "electron/**/*"],
+    "directories": { "output": "release" },
+    "win": { "target": "nsis" },
+    "mac": { "target": "dmg" },
+    "linux": { "target": "AppImage" }
+  }
+}

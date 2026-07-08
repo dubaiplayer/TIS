@@ -1,11 +1,22 @@
 """
-Explicit, adjustable risk combination.
+Explicit, adjustable risk combination — NOISY-OR of independent signals.
 
-Overall risk = normalized weighted average of attribute scores + the classifier
-probability. Nothing hidden: `contributions` reports every term that went into
-the number, and `top_signals` names what drove it. All weights live in
-weights.yaml (see the CO-EQUAL classifier_weight note there).
+Why noisy-OR (not a weighted average): phishing evidence is disjunctive. A single
+confident signal — the classifier, or one strong attribute like a spoofed sender +
+wire-transfer request — should be able to drive risk high on its own. A weighted
+mean drowns strong signals among the many attributes that (correctly) stay silent,
+which in Step-4 testing left almost no email reaching the "phishing" verdict.
+
+Each signal casts a "vote" = reliability * score, and:
+    risk = 1 - Π (1 - vote_i)
+So any one high vote pushes risk toward 1, while many zeros leave it near 0.
+
+Reliability (0..1) comes from weights.yaml: attribute_weights are normalized by
+the max weight and scaled by attribute_reliability_ceiling (so no single lexical
+hit is fully trusted); the classifier gets its own classifier_reliability. Tune
+everything in weights.yaml — nothing here is hidden.
 """
+import math
 import os
 
 import yaml
@@ -26,30 +37,40 @@ def combine(attribute_results, classifier_prob=None, cfg=None):
     cfg = cfg or load_weights()
     aw = cfg["attribute_weights"]
     skip = set(cfg.get("skip_when_unavailable", []))
+    ceiling = float(cfg.get("attribute_reliability_ceiling", 0.9))
+    clf_reliability = float(cfg.get("classifier_reliability", 0.97))
+    vote_floor = float(cfg.get("vote_floor", 0.0))
+    max_w = max(aw.values()) if aw else 1.0
 
-    num = den = 0.0
+    log_survival = 0.0          # accumulate log(1 - vote) for numerical stability
     contributions = []
+
+    def cast(name, score, reliability, included=True, floor=True):
+        nonlocal log_survival
+        vote = max(0.0, min(0.999, reliability * score))
+        # Vote floor: ignore weak votes so many small attribute hits (esp. the
+        # always-firing caps_tone/grammar) don't accumulate into false alarms on
+        # legit corporate mail. The classifier is exempt (never floored).
+        if floor and vote < vote_floor:
+            vote = 0.0
+        if included:
+            log_survival += math.log(1.0 - vote)
+        contributions.append({"name": name, "score": round(score, 4),
+                              "reliability": round(reliability, 3),
+                               "vote": round(vote, 4), "included": included})
+
     for r in attribute_results:
         w = aw.get(r.name, 1.0)
-        unavailable = r.name in skip and r.label.startswith("unavailable")
-        if unavailable:
-            contributions.append({"name": r.name, "score": r.score, "weight": w,
-                                   "weighted": 0.0, "included": False})
-            continue
-        num += w * r.score
-        den += w
-        contributions.append({"name": r.name, "score": r.score, "weight": w,
-                               "weighted": round(w * r.score, 4), "included": True})
+        reliability = (w / max_w) * ceiling
+        if r.name in skip and r.label.startswith("unavailable"):
+            cast(r.name, r.score, reliability, included=False)
+        else:
+            cast(r.name, r.score, reliability)
 
     if classifier_prob is not None:
-        wc = float(cfg.get("classifier_weight", 0.0))
-        num += wc * classifier_prob
-        den += wc
-        contributions.append({"name": "content_classifier", "score": round(classifier_prob, 4),
-                              "weight": wc, "weighted": round(wc * classifier_prob, 4),
-                               "included": True})
+        cast("content_classifier", classifier_prob, clf_reliability, floor=False)
 
-    risk = (num / den) if den else 0.0
+    risk = 1.0 - math.exp(log_survival)
     t = cfg["verdict_thresholds"]
     if risk >= t["phishing_at_or_above"]:
         verdict = "phishing"
@@ -58,9 +79,8 @@ def combine(attribute_results, classifier_prob=None, cfg=None):
     else:
         verdict = "suspicious"
 
-    ranked = sorted((c for c in contributions if c["included"]),
-                    key=lambda c: -c["weighted"])
-    top_signals = [c["name"] for c in ranked if c["score"] >= 0.33][:4]
+    ranked = sorted((c for c in contributions if c["included"]), key=lambda c: -c["vote"])
+    top_signals = [c["name"] for c in ranked if c["vote"] >= 0.15][:4]
 
     return {
         "risk_score": round(risk, 4),

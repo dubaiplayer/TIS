@@ -105,16 +105,48 @@ def _audit_coefficients(model, k=25):
 
 
 class PhishClassifier:
-    """Thin wrapper: load once, score a raw email string -> phishing probability."""
+    """Thin wrapper: load once, score a raw email string -> phishing probability,
+    and (for linear models) extract exact per-term contributions to the score."""
     _cache = None
 
     def __init__(self, path=MODEL_PATH):
         if PhishClassifier._cache is None:
             PhishClassifier._cache = joblib.load(path)
         self.pipeline = PhishClassifier._cache["pipeline"]
+        self._feats = self.pipeline.named_steps["feats"]
+        self._clf = self.pipeline.named_steps["clf"]
+        self._coef = self._clf.coef_[0]
+        self._names = self._feats.get_feature_names_out()
 
     def proba(self, text):
         return float(self.pipeline.predict_proba([text or ""])[:, 1][0])
+
+    def explain(self, text, top_k=15):
+        """Exact local attribution for THIS email (valid because LogReg is linear):
+        contribution_i = coef_i * tfidf_i(email); these sum to the logit.
+
+        Word n-grams are returned as human-readable keywords; character n-grams are
+        aggregated into one number (not shown as keywords). Returns signed weights
+        (positive = pushes phishing, negative = pushes legitimate).
+        """
+        x = self._feats.transform([text or ""]).tocoo()
+        logit = float(self._clf.intercept_[0])
+        word_terms, char_total = {}, 0.0
+        for j, v in zip(x.col, x.data):
+            c = float(v) * float(self._coef[j])
+            logit += c
+            kind, term = self._names[j].split("__", 1)
+            if kind == "word":
+                word_terms[term] = word_terms.get(term, 0.0) + c
+            else:
+                char_total += c
+        prob = float(1.0 / (1.0 + np.exp(-logit)))
+        ranked = sorted(word_terms.items(), key=lambda kv: -abs(kv[1]))
+        phishing = [(t, w) for t, w in ranked if w > 0][:top_k]
+        legitimate = [(t, w) for t, w in ranked if w < 0][:top_k]
+        return {"prob": prob, "logit": logit, "intercept": float(self._clf.intercept_[0]),
+                "phishing_terms": phishing, "legit_terms": legitimate,
+                "char_contribution": char_total}
 
 
 if __name__ == "__main__":

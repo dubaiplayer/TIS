@@ -1,10 +1,14 @@
-# Risk combination weights & thresholds — EDIT THIS to tune the tool.
-# Overall risk = weighted average of attribute scores (each 0..1) and the
-# classifier probability. Weights are relative; they are normalized at runtime.
+# Risk combination config — EDIT THIS to tune the tool.
+#
+# Combination is NOISY-OR (see risk.py): each signal votes = reliability * score,
+# and risk = 1 - product(1 - vote). Any one confident signal can drive risk high.
 
-# Per-attribute weights. Grounded in the Step-2 lift validation: financial/419,
-# credential-phrase, and reward signals validated strongest; curiosity/grammar
-# weakest on this corpus, so lower weights.
+# Per-attribute weights -> normalized by the max weight below, then scaled by
+# attribute_reliability_ceiling to give each attribute's reliability (0..1).
+# Grounded in Step-2 lift + Step-4 validation: financial/credential/reward
+# validated strongest; grammar & caps_tone are UNRELIABLE ON THIS CORPUS
+# (grammar flags corporate jargon; caps_tone doesn't separate) -> kept for
+# real-world value + interpretability but deliberately low reliability.
 attribute_weights:
   urgency: 1.0
   fear_threat: 1.1
@@ -16,21 +20,31 @@ attribute_weights:
   generic_greeting: 0.9
   sender_domain: 1.3
   links: 1.2
-  grammar: 0.4
-  caps_tone: 0.6
+  grammar: 0.35        # unreliable here (corporate-jargon false positives)
+  caps_tone: 0.5       # non-discriminative here
 
-# CO-EQUAL ML: the classifier's weight ≈ the SUM of all attribute weights above
-# (~13), so rules and the model each contribute ~half of the risk score. Dial
-# this DOWN if Step-4 per-source metrics show the model riding source/campaign
-# leakage rather than genuine phishing signal.
-classifier_weight: 13.0
+# A SINGLE rule attribute should top out at "suspicious", not "phishing": only
+# the classifier (or several corroborating attributes) can reach a phishing
+# verdict. So the top-weighted attribute (credential) reaches only this
+# reliability; others scale below it. This keeps legit corporate mail that uses
+# financial/authority vocabulary from being single-handedly flagged.
+attribute_reliability_ceiling: 0.6
 
-# Verdict bands on the final 0..1 risk score.
+# Ignore attribute votes below this (reliability*score). Stops the always-firing
+# weak attributes (caps_tone/grammar) from accumulating into false alarms.
+vote_floor: 0.12
+
+# The classifier is CO-EQUAL and, being a strong learned signal, is trusted enough
+# to drive a verdict on its own. Dial DOWN if per-source metrics show it riding
+# source/campaign leakage (Step-4 coefficient audit flagged 'enron'/'re:'/'thanks').
+classifier_reliability: 0.97
+
+# Verdict bands on the final 0..1 risk score. Recalibrated for noisy-OR (Step 4):
+# confident-phishing now lands ~0.9+, benign corporate mail ~0.0-0.25.
 verdict_thresholds:
-  legitimate_below: 0.34    # < 0.34            -> "legitimate"
-  phishing_at_or_above: 0.67  # >= 0.67         -> "phishing"; between -> "suspicious"
+  legitimate_below: 0.35        # < 0.35            -> "legitimate"
+  phishing_at_or_above: 0.60    # >= 0.60           -> "phishing"; between -> "suspicious"
 
-# Attributes whose absence should NOT lower confidence when uncomputable
-# (e.g. sender_domain when no sender header). Excluded from the denominator when
-# they report "unavailable".
+# Attributes excluded from the vote when uncomputable (e.g. sender_domain with no
+# sender header) so absence of evidence isn't treated as evidence of safety.
 skip_when_unavailable: [sender_domain]

@@ -11,6 +11,12 @@ venv/
 # Data & model artifacts — large and regenerable (see data_prep.py / classifier.py)
 data/
 models/
+reports/
+
+# Node / Electron (desktop app)
+desktop/node_modules/
+desktop/dist/
+desktop/release/
 
 # OS
 Thumbs.db
