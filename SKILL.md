@@ -3,7 +3,7 @@
 An HTTP service that analyzes a raw email and returns an explainable phishing verdict — an overall risk score, 12 per-attribute manipulation scores with the exact evidence text, and the classifier keywords that drove the decision. Any agent handling email can call it to answer "is this email phishing, and why?"
 
 Base URL:
-https://phishing-analyzer-api.onrender.com
+https://phishing-analyzer-api-wq1v.onrender.com
 
 Note: this is a free-tier host that sleeps when idle. The first request after a quiet period can take 30–60 seconds while it wakes. Send a `GET /health` first to warm it up, then call `/analyze`.
 
@@ -14,7 +14,7 @@ Liveness check. Returns `{"status":"ok"}`. Use it to warm up the service before 
 
 Example call:
 ```
-curl https://phishing-analyzer-api.onrender.com/health
+curl https://phishing-analyzer-api-wq1v.onrender.com/health
 ```
 Example response:
 ```json
@@ -26,7 +26,7 @@ Analyze one email. Send a JSON body with a single field `text` containing the ra
 
 Example call:
 ```
-curl -X POST https://phishing-analyzer-api.onrender.com/analyze \
+curl -X POST https://phishing-analyzer-api-wq1v.onrender.com/analyze \
   -H "Content-Type: application/json" \
   -d '{"text": "From: PayPal Security <service@account-verify.gmail.com>\nSubject: URGENT: verify your account\n\nDear Customer, unusual activity was detected and your account was suspended. Verify your account within 24 hours or it will be permanently blocked: http://bit.ly/verify-now"}'
 ```
@@ -63,7 +63,7 @@ Returns this document as `text/markdown` (so an agent or the registry can fetch 
 
 Example call:
 ```
-curl https://phishing-analyzer-api.onrender.com/skill.md
+curl https://phishing-analyzer-api-wq1v.onrender.com/skill.md
 ```
 
 ## How the agent should use this
