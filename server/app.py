@@ -1,15 +1,20 @@
 """
-Local analysis API for the desktop app.
+Phishing Analyzer API — hosted HTTP service.
 
-Wraps the existing pipeline so the Electron renderer can POST pasted email text
-and receive the validated AnalysisReport JSON (verdict, per-attribute scores +
-evidence, classifier keyword attributions).
+Wraps the local pipeline behind two endpoints so ANY caller (an AI agent, curl, a
+browser) can analyze an email and receive the validated AnalysisReport JSON
+(verdict, per-attribute scores + evidence, classifier keyword attributions).
 
-Run:  .venv/Scripts/python.exe -m uvicorn server.app:app --host 127.0.0.1 --port 8008
-   or .venv/Scripts/python.exe -m server.app
+Deploy (Render): start command
+    uvicorn server.app:app --host 0.0.0.0 --port $PORT
+Local:
+    .venv/Scripts/python.exe -m server.app
 """
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
 from phishing_analyzer import pipeline
@@ -17,8 +22,7 @@ from phishing_analyzer.schema import AnalysisReport, build_report
 
 app = FastAPI(title="Phishing Analyzer API", version="1.0.0")
 
-# Local desktop app only: the Electron renderer runs from http://localhost:5173
-# (dev) or file:// (packaged), so allow all origins on loopback.
+# Public API for agents/tools: allow all origins.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -26,27 +30,53 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_SKILL_PATH = os.path.join(_ROOT, "SKILL.md")
+
 
 class AnalyzeRequest(BaseModel):
     text: str = Field(description="Raw email text (headers + body, or just body)")
     use_classifier: bool = True
 
 
+@app.get("/")
+def root():
+    """Human/warm-up landing: names the service and points to the docs."""
+    return {
+        "service": "Phishing Analyzer API",
+        "description": "POST an email to /analyze to get an explainable phishing verdict.",
+        "endpoints": {"health": "GET /health", "analyze": "POST /analyze",
+                      "skill": "GET /skill.md", "openapi": "GET /docs"},
+    }
+
+
 @app.get("/health")
 def health():
-    """Cheap readiness check the app pings before enabling Analyze."""
+    """Liveness/readiness check (free-tier cold start can take 30-60s)."""
     return {"status": "ok"}
+
+
+@app.get("/skill.md", response_class=PlainTextResponse)
+def skill_md():
+    """Serve the SKILL.md so the registry/agent can fetch it from the live URL."""
+    try:
+        with open(_SKILL_PATH, "r", encoding="utf-8") as f:
+            return PlainTextResponse(f.read(), media_type="text/markdown")
+    except FileNotFoundError:
+        return PlainTextResponse("SKILL.md not found", status_code=404)
 
 
 @app.post("/analyze", response_model=AnalysisReport)
 def analyze(req: AnalyzeRequest) -> AnalysisReport:
+    """Analyze one raw email -> structured phishing report."""
     result = pipeline.analyze_raw(req.text, use_classifier=req.use_classifier)
     return build_report(result)
 
 
 def main():
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8008)
+    port = int(os.environ.get("PORT", "8008"))
+    uvicorn.run(app, host="0.0.0.0", port=port)
 
 
 if __name__ == "__main__":

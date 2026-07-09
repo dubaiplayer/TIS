@@ -12,6 +12,9 @@ venv/
 data/
 models/
 reports/
+# ...except the trained classifier, which the hosted service needs at runtime:
+!models/
+!models/classifier.joblib
 
 # Node / Electron (desktop app)
 desktop/node_modules/

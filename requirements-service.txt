@@ -1,0 +1,14 @@
+# Runtime dependencies for the hosted /analyze service (Render).
+# Pinned to the versions that TRAINED models/classifier.joblib so it deserializes
+# cleanly. Excludes pandas/pyarrow/pytest (training/dev only) to cut image + RAM.
+fastapi==0.139.0
+uvicorn[standard]==0.51.0
+pydantic==2.13.4
+scikit-learn==1.9.0
+numpy==2.5.1
+scipy==1.18.0
+joblib==1.5.3
+pyspellchecker==0.9.0
+beautifulsoup4==4.15.0
+lxml==6.1.1
+PyYAML==6.0.3

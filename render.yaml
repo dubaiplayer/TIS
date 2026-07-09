@@ -1,0 +1,13 @@
+# Render Blueprint — one-click deploy of the Phishing Analyzer API.
+# In Render: New -> Blueprint -> connect this repo -> it reads this file -> Deploy.
+services:
+  - type: web
+    name: phishing-analyzer-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements-service.txt
+    startCommand: uvicorn server.app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.6"

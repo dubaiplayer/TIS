@@ -17,7 +17,6 @@ import os
 
 import joblib
 import numpy as np
-import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import f1_score, precision_score, recall_score, roc_auc_score
@@ -47,6 +46,7 @@ def _metrics(y, p, thr=0.5):
 
 
 def train():
+    import pandas as pd  # training-only: kept out of the runtime/serving import path
     os.makedirs(MODEL_DIR, exist_ok=True)
     tr = pd.read_parquet(os.path.join(PROC, "trackA_train.parquet"))
     va = pd.read_parquet(os.path.join(PROC, "trackA_val.parquet"))
