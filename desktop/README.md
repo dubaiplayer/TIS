@@ -8,6 +8,20 @@ highlighting, and expandable per-attribute evidence.
 Two window modes (top-right toggle): **Float** (normal window) and **Dock ▸**
 (docked to the right screen edge, always-on-top).
 
+## Two views (top tabs)
+- **Analyze** — paste an email; it's analyzed (auto after ~0.8s or via the button).
+- **Inbox Sim** — the **autonomous demo**: on open it generates a labeled inbox of
+  synthetic emails (malicious ↔ benign) and works through every one with no user
+  input, streaming a verdict + expandable breakdown per email and a live
+  **scoreboard** (your model's accuracy vs the known labels).
+  - Detection is always **your model** (deterministic). The optional **LLM agent**
+    (Claude Agent SDK, via the `phishing-email-analyzer` skill) only replaces the
+    human "click Analyze" step and narrates an action per email.
+  - Agent mode needs `ANTHROPIC_API_KEY` set in the environment that runs the
+    backend, plus `pip install claude-agent-sdk`. Without it, the view shows a
+    clear banner and runs model-only (verdicts unchanged).
+  - Emails are **synthetic templates** — a pipeline demo, not a real-world benchmark.
+
 ## Prerequisites
 - Python venv set up at repo root with backend deps:
   `.venv/Scripts/python.exe -m pip install -r ../requirements.txt`

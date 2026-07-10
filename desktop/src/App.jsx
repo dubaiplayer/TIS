@@ -4,6 +4,7 @@ import RiskBanner from "./components/RiskBanner";
 import AttributeBarChart from "./components/AttributeBarChart";
 import KeywordHighlight from "./components/KeywordHighlight";
 import AttributeList from "./components/AttributeList";
+import InboxSimulator from "./components/InboxSimulator";
 
 const AUTO_DELAY = 800; // ms after typing/paste stops
 
@@ -15,6 +16,7 @@ export default function App() {
   const [serverUp, setServerUp] = useState(true);
   const [auto, setAuto] = useState(true);
   const [mode, setMode] = useState("float");
+  const [view, setView] = useState("analyze"); // "analyze" | "inbox"
   const timer = useRef(null);
 
   // Poll health so we can warn early if the backend isn't running.
@@ -59,6 +61,12 @@ export default function App() {
     <div className="app">
       <header className="topbar">
         <div className="title">🎣 Phishing Analyzer</div>
+        <div className="tabs">
+          <button className={view === "analyze" ? "seg on" : "seg"}
+                  onClick={() => setView("analyze")}>Analyze</button>
+          <button className={view === "inbox" ? "seg on" : "seg"}
+                  onClick={() => setView("inbox")}>Inbox Sim</button>
+        </div>
         <div className="controls">
           <label className="auto-toggle">
             <input type="checkbox" checked={auto}
@@ -77,38 +85,44 @@ export default function App() {
         </div>
       )}
 
-      <section className="input-area">
-        <textarea
-          className="paste"
-          placeholder="Paste an email here (headers + body, or just the body)…"
-          value={text}
-          onChange={(e) => onChange(e.target.value)}
-          spellCheck={false}
-        />
-        <div className="actions">
-          <button className="analyze-btn" onClick={() => run(text)} disabled={loading || !text.trim()}>
-            {loading ? "Analyzing…" : "Analyze"}
-          </button>
-          {loading && <span className="spinner" aria-label="loading" />}
-        </div>
-      </section>
+      {view === "inbox" ? (
+        <InboxSimulator />
+      ) : (
+        <>
+          <section className="input-area">
+            <textarea
+              className="paste"
+              placeholder="Paste an email here (headers + body, or just the body)…"
+              value={text}
+              onChange={(e) => onChange(e.target.value)}
+              spellCheck={false}
+            />
+            <div className="actions">
+              <button className="analyze-btn" onClick={() => run(text)} disabled={loading || !text.trim()}>
+                {loading ? "Analyzing…" : "Analyze"}
+              </button>
+              {loading && <span className="spinner" aria-label="loading" />}
+            </div>
+          </section>
 
-      {error && <div className="error-box">{error}</div>}
+          {error && <div className="error-box">{error}</div>}
 
-      {report && !loading && (
-        <section className="results">
-          <RiskBanner report={report} />
-          <AttributeBarChart attributes={report.attributes} />
-          <KeywordHighlight report={report} />
-          <AttributeList attributes={report.attributes} />
-          {report.meta?.notes?.length > 0 && (
-            <p className="muted small">Notes: {report.meta.notes.join("; ")}</p>
+          {report && !loading && (
+            <section className="results">
+              <RiskBanner report={report} />
+              <AttributeBarChart attributes={report.attributes} />
+              <KeywordHighlight report={report} />
+              <AttributeList attributes={report.attributes} />
+              {report.meta?.notes?.length > 0 && (
+                <p className="muted small">Notes: {report.meta.notes.join("; ")}</p>
+              )}
+            </section>
           )}
-        </section>
-      )}
 
-      {!report && !loading && !error && (
-        <div className="empty">Paste an email above to see its phishing breakdown.</div>
+          {!report && !loading && !error && (
+            <div className="empty">Paste an email above to see its phishing breakdown.</div>
+          )}
+        </>
       )}
     </div>
   );

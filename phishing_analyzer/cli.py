@@ -12,6 +12,7 @@ Examples:
   .venv/Scripts/python.exe -m phishing_analyzer.cli --file email.txt --json
 """
 import argparse
+import json
 import sys
 
 from . import pipeline
@@ -122,20 +123,26 @@ def main(argv=None):
     ap.add_argument("--no-classifier", action="store_true", help="rules only (skip the ML model)")
     args = ap.parse_args(argv)
 
-    if args.demo:
-        raw = DEMO_EMAIL
-    elif args.file:
-        with open(args.file, "r", encoding="utf-8", errors="replace") as f:
-            raw = f.read()
-    elif args.text:
-        raw = args.text
-    else:
-        raw = sys.stdin.read()
-    if not raw.strip():
-        ap.error("no input (use --file, --text, --demo, or pipe via stdin)")
-
-    result = pipeline.analyze_raw(raw, use_classifier=not args.no_classifier)
-    report = build_report(result)
+    try:
+        if args.demo:
+            raw = DEMO_EMAIL
+        elif args.file:
+            with open(args.file, "r", encoding="utf-8", errors="replace") as f:
+                raw = f.read()
+        elif args.text:
+            raw = args.text
+        else:
+            raw = sys.stdin.read()
+        if not raw.strip():
+            raise ValueError("no input (use --file, --text, --demo, or pipe via stdin)")
+        report = build_report(pipeline.analyze_raw(raw, use_classifier=not args.no_classifier))
+    except Exception as e:
+        # Agent-friendly: always emit parseable output + a non-zero exit on failure.
+        if args.json:
+            print(json.dumps({"error": str(e), "error_type": type(e).__name__}))
+        else:
+            print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
 
     if args.json:
         print(report.model_dump_json(indent=2))

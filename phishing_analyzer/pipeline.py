@@ -27,8 +27,9 @@ def _classifier_detail(text, use_classifier):
             from .classifier import PhishClassifier
             _clf = PhishClassifier()
         return _clf.explain(text)
-    except FileNotFoundError:
-        return None            # model not trained yet -> rules-only
+    except Exception:
+        # Missing OR corrupt/incompatible model -> degrade to rules-only, don't crash.
+        return None
 
 
 def _term_spans(term, text, limit=6):
@@ -63,7 +64,7 @@ def analyze(text, sender=None, use_classifier=True):
 
     notes = []
     if prob is None and use_classifier:
-        notes.append("classifier model not found; rules-only score")
+        notes.append("classifier unavailable; rules-only score")
     if not sender:
         notes.append("no sender header; sender_domain spoof check skipped")
 
