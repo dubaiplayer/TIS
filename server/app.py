@@ -303,6 +303,9 @@ async def _agent_events(run_id):
                     lambda raw=it["raw_email"]: build_report(pipeline.analyze_raw(raw)))
                 if not graded:  # real Gmail/Outlook inbox: suppress buzzword-only
                     rep = gmail_triage.adjust(rep, it["raw_email"], it.get("from", ""))
+                # Cache the EXACT report behind this row so the drill-down serves the
+                # same object - the flag and the expanded analysis can never diverge.
+                run.setdefault("reports", {})[f] = rep.model_dump()
                 v, risk = rep.verdict, rep.risk_score
             else:
                 v, risk = ev.get("verdict"), ev.get("risk")
@@ -328,6 +331,19 @@ async def _agent_events(run_id):
 def agent_stream(run_id: str):
     """SSE: live agent activity + per-email verdicts, then a final scoreboard."""
     return StreamingResponse(_agent_events(run_id), media_type="text/event-stream")
+
+
+@app.get("/agent/report/{run_id}/{file}")
+def agent_report(run_id: str, file: str):
+    """The exact report a row's flag was computed from (incl. any Gmail trust
+    adjustment). The drill-down fetches this so it always matches the row."""
+    run = _AGENT_RUNS.get(run_id)
+    if not run:
+        raise HTTPException(404, "unknown run_id")
+    rep = (run.get("reports") or {}).get(file)
+    if rep is None:
+        raise HTTPException(404, "no report for that email")
+    return rep
 
 
 class QuarantineRequest(BaseModel):

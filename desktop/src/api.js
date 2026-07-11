@@ -109,6 +109,18 @@ export function agentStreamUrl(runId) {
   return `${BASE}/agent/stream/${runId}`;
 }
 
+// ---- The exact report a row's flag came from (guaranteed row/drill-down match) ----
+export async function agentReport(runId, file) {
+  let res;
+  try {
+    res = await fetch(`${BASE}/agent/report/${runId}/${encodeURIComponent(file)}`);
+  } catch {
+    throw new ServerDownError("Can't reach the analyzer server on 127.0.0.1:8008.");
+  }
+  if (!res.ok) throw new Error(`report unavailable (HTTP ${res.status}).`);
+  return res.json();
+}
+
 // ---- Inbox-aware analyze (real Gmail/Outlook messages; adds sender-auth trust) ----
 export async function analyzeInboxEmail(text, from_addr = "") {
   let res;
