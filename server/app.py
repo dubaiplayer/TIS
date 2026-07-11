@@ -15,7 +15,7 @@ import urllib.request
 import uuid
 from typing import Optional
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 from phishing_analyzer import pipeline
 from phishing_analyzer.schema import AnalysisReport, build_report
 from inbox_sim.generator import generate_inbox
-from server import sim_agent, agent_runner
+from server import sim_agent, agent_runner, mailbox
 
 app = FastAPI(title="Phishing Analyzer API", version="1.0.0")
 
@@ -185,6 +185,15 @@ def sim_run_all(req: SimRunRequest):
 _AGENT_RUNS = {}
 
 
+class AgentRunRequest(BaseModel):
+    n: int = Field(default=8, ge=1, le=30)
+    malicious_ratio: float = Field(default=0.5, ge=0.0, le=1.0)
+    seed: Optional[int] = None
+    source: str = Field(default="synthetic")   # "synthetic" | "gmail" | "outlook"
+    email: Optional[str] = None
+    app_password: Optional[str] = None
+
+
 @app.get("/agent/status")
 def agent_status():
     """Whether the headless-agent mode is usable (claude CLI on PATH)."""
@@ -192,17 +201,30 @@ def agent_status():
 
 
 @app.post("/agent/run")
-def agent_run(req: SimRunRequest):
-    """Generate a random inbox; return a run_id + display list (with raw_email so
-    the GUI can fetch the full breakdown on expand)."""
-    inbox = generate_inbox(req.n, req.malicious_ratio, seed=req.seed)
+def agent_run(req: AgentRunRequest):
+    """Build an inbox (synthetic demo OR the user's real mailbox over IMAP), then
+    return a run_id + display list (with raw_email so the GUI can fetch the full
+    breakdown on expand). The agent + SKILL.md flow is identical either way."""
+    if req.source in ("gmail", "outlook"):
+        if not req.email or not req.app_password:
+            raise HTTPException(400, "email and app_password are required for a mailbox source")
+        try:
+            inbox = mailbox.fetch_recent(req.email, req.app_password, n=req.n, provider=req.source)
+        except Exception as e:
+            raise HTTPException(400, str(e))
+        if not inbox:
+            raise HTTPException(400, "no messages found in the inbox")
+        graded = False
+    else:
+        inbox = generate_inbox(req.n, req.malicious_ratio, seed=req.seed)
+        graded = True
     run_id = uuid.uuid4().hex
-    _AGENT_RUNS[run_id] = {"inbox": inbox}
+    _AGENT_RUNS[run_id] = {"inbox": inbox, "graded": graded}
     display = [{"id": it["id"], "file": f"email_{it['id']:02d}.txt",
                 "from": it["from"], "subject": it["subject"],
                 "raw_email": it["raw_email"]} for it in inbox]
     return {"run_id": run_id, "available": agent_runner.claude_cli_available(),
-            "count": len(inbox), "inbox": display}
+            "count": len(inbox), "inbox": display, "graded": graded}
 
 
 async def _agent_events(run_id):
@@ -211,25 +233,34 @@ async def _agent_events(run_id):
         yield _sse({"type": "error", "error": "unknown run_id"})
         return
     inbox = run["inbox"]
-    truth = {f"email_{it['id']:02d}.txt": it["truth_label"] for it in inbox}
-    total = correct = fp = fn = 0
+    graded = run.get("graded", True)
+    truth = {f"email_{it['id']:02d}.txt": it.get("truth_label") for it in inbox}
+    total = correct = fp = fn = flagged = 0
     async for ev in agent_runner.run_agent_events(inbox):
         if ev.get("type") == "email":
             f, v = ev.get("file"), ev.get("verdict")
             tl = truth.get(f)
             pred = _predicted_label(v) if v else None
-            ok = (pred == tl) if (pred and tl) else None
-            if ok is not None:
+            if pred is not None:
                 total += 1
+                if pred == "phishing":
+                    flagged += 1
+            if graded and pred and tl:
+                ok = (pred == tl)
                 correct += ok
                 fp += (not ok and pred == "phishing")
                 fn += (not ok and pred == "legitimate")
+            else:
+                ok = None
             yield _sse({"type": "email", "file": f, "verdict": v, "risk": ev.get("risk"),
                         "truth_label": tl, "correct": ok})
         elif ev.get("type") == "done":
-            yield _sse({"type": "scoreboard", "total": total, "correct": correct,
-                        "accuracy": round(correct / total, 4) if total else 0.0,
-                        "false_positives": fp, "false_negatives": fn})
+            if graded:
+                yield _sse({"type": "scoreboard", "graded": True, "total": total, "correct": correct,
+                            "accuracy": round(correct / total, 4) if total else 0.0,
+                            "false_positives": fp, "false_negatives": fn})
+            else:
+                yield _sse({"type": "scoreboard", "graded": False, "total": total, "flagged": flagged})
         else:
             yield _sse(ev)  # activity / error pass-through
 

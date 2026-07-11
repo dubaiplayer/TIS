@@ -81,20 +81,27 @@ export async function agentStatus() {
   }
 }
 
-export async function agentRun({ n = 6, malicious_ratio = 0.5, seed = null } = {}) {
+export async function agentRun({
+  n = 6, malicious_ratio = 0.5, seed = null,
+  source = "synthetic", email = null, app_password = null,
+} = {}) {
   let res;
   try {
     res = await fetch(`${BASE}/agent/run`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ n, malicious_ratio, seed }),
+      body: JSON.stringify({ n, malicious_ratio, seed, source, email, app_password }),
     });
   } catch {
     throw new ServerDownError(
       "Can't reach the analyzer server on 127.0.0.1:8008. Start the Python backend first."
     );
   }
-  if (!res.ok) throw new Error(`Agent run failed (HTTP ${res.status}).`);
+  if (!res.ok) {
+    let detail = "";
+    try { detail = (await res.json()).detail || ""; } catch { /* ignore */ }
+    throw new Error(detail || `Agent run failed (HTTP ${res.status}).`);
+  }
   return res.json();
 }
 

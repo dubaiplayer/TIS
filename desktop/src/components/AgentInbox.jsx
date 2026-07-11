@@ -1,10 +1,10 @@
 // Live Agent view.
 //
 // A real headless Claude Code agent (spawned by the local backend) reads a local
-// SKILL.md and calls /analyze for every generated email. This view streams the
-// agent's activity on the right, updates the inbox verdicts on the left as they
-// land, and expands any email into the full analysis (including the new real-world
-// detectors) fetched from the same local API.
+// SKILL.md and calls /analyze for every email. The inbox is either a synthetic
+// demo batch OR the user's REAL mailbox fetched over IMAP ("My Gmail") - the
+// agent + SKILL.md flow is identical either way. Activity streams on the right,
+// verdicts fill in on the left, and any email expands to the full breakdown.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { agentRun, agentStreamUrl, analyzeEmail, ServerDownError } from "../api";
 import RiskBanner from "./RiskBanner";
@@ -16,14 +16,17 @@ const VERDICT_COLOR = { phishing: "#ff453a", suspicious: "#ff9f0a", legitimate: 
 const N = 6;
 
 export default function AgentInbox() {
-  const [rows, setRows] = useState([]);        // {id,file,from,subject,raw_email,...}
-  const [activity, setActivity] = useState([]); // {kind,text}
+  const [rows, setRows] = useState([]);
+  const [activity, setActivity] = useState([]);
   const [board, setBoard] = useState(null);
   const [available, setAvailable] = useState(true);
-  const [status, setStatus] = useState("idle"); // idle | running | done | error
+  const [status, setStatus] = useState("idle");
   const [error, setError] = useState(null);
   const [expanded, setExpanded] = useState(null);
-  const [reports, setReports] = useState({});   // file -> full report
+  const [reports, setReports] = useState({});
+  const [source, setSource] = useState("synthetic"); // "synthetic" | "gmail"
+  const [gEmail, setGEmail] = useState("");
+  const [gPass, setGPass] = useState("");
   const esRef = useRef(null);
   const doneRef = useRef(false);
   const gotDataRef = useRef(false);
@@ -31,17 +34,17 @@ export default function AgentInbox() {
 
   const stop = () => { if (esRef.current) { esRef.current.close(); esRef.current = null; } };
 
-  const run = useCallback(async () => {
+  const run = useCallback(async (opts = {}) => {
     stop();
     doneRef.current = false; gotDataRef.current = false;
     setError(null); setBoard(null); setExpanded(null); setReports({});
     setRows([]); setActivity([]); setStatus("running");
     let info;
     try {
-      info = await agentRun({ n: N });
+      info = await agentRun({ n: N, ...opts });
     } catch (e) {
       setStatus("error");
-      setError(e instanceof ServerDownError ? e.message : `Failed to start: ${e.message}`);
+      setError(e instanceof ServerDownError ? e.message : e.message);
       return;
     }
     setAvailable(info.available);
@@ -81,9 +84,8 @@ export default function AgentInbox() {
     };
   }, []);
 
-  useEffect(() => { run(); return stop; }, []); // auto-run on open
+  useEffect(() => { run(); return stop; }, []); // auto-run the demo on open
 
-  // keep the activity feed scrolled to the newest line
   useEffect(() => {
     if (feedRef.current) feedRef.current.scrollTop = feedRef.current.scrollHeight;
   }, [activity]);
@@ -100,6 +102,9 @@ export default function AgentInbox() {
     }
   };
 
+  const runGmail = () =>
+    run({ source: "gmail", email: gEmail.trim(), app_password: gPass.replace(/\s+/g, "") });
+
   return (
     <div className="sim">
       <div className="sim-bar">
@@ -110,28 +115,73 @@ export default function AgentInbox() {
           </span>
         </div>
         <div className="sim-actions">
-          <button className="analyze-btn" onClick={run} disabled={status === "running"}>
-            {status === "running" ? "Agent running…" : "Regenerate + run"}
-          </button>
+          <div className="tabs">
+            <button className={source === "synthetic" ? "seg on" : "seg"}
+                    onClick={() => { setSource("synthetic"); run(); }}>Demo inbox</button>
+            <button className={source === "gmail" ? "seg on" : "seg"}
+                    onClick={() => setSource("gmail")}>My Gmail</button>
+          </div>
+          {source === "synthetic" && (
+            <button className="analyze-btn" onClick={() => run()} disabled={status === "running"}>
+              {status === "running" ? "Agent running…" : "Regenerate + run"}
+            </button>
+          )}
         </div>
       </div>
 
+      {source === "gmail" && (
+        <div className="connect">
+          <div className="connect-row">
+            <input className="connect-input" type="email" placeholder="you@gmail.com"
+                   value={gEmail} onChange={(e) => setGEmail(e.target.value)} autoComplete="username" />
+            <input className="connect-input" type="password" placeholder="16-char app password"
+                   value={gPass} onChange={(e) => setGPass(e.target.value)} autoComplete="current-password" />
+            <button className="analyze-btn" onClick={runGmail}
+                    disabled={status === "running" || !gEmail || !gPass}>
+              {status === "running" ? "Analyzing…" : "Analyze my inbox"}
+            </button>
+          </div>
+          <div className="connect-hint">
+            Uses a Gmail <b>app password</b> (turn on 2-step verification, then create one at
+            myaccount.google.com/apppasswords) — not your normal password. It's sent only to your
+            local backend for one IMAP fetch and is never stored.
+          </div>
+        </div>
+      )}
+
       <div className="hosted-note">
-        A real headless agent reads a <b>SKILL.md</b> and calls the analyzer itself for
-        every randomly generated email — you type nothing. Its steps stream on the right;
-        click any email for the full breakdown.
+        {source === "gmail"
+          ? <>A real agent reads your <b>actual inbox</b> over IMAP and analyzes each email with the
+             same SKILL.md. Its steps stream on the right; click any email for the full breakdown.</>
+          : <>A real headless agent reads a <b>SKILL.md</b> and calls the analyzer itself for every
+             randomly generated email — you type nothing. Steps stream on the right.</>}
       </div>
       {error && <div className="error-box">{error}</div>}
 
       {board && (
         <div className="scoreboard">
           <div className="score-main">
-            <span className="score-acc">{Math.round(board.accuracy * 100)}%</span>
-            <span className="score-sub">agent accuracy · {board.correct}/{board.total} correct</span>
+            {board.graded === false ? (
+              <>
+                <span className="score-acc">{board.flagged}/{board.total}</span>
+                <span className="score-sub">flagged as phishing · analyzed by the agent via SKILL.md</span>
+              </>
+            ) : (
+              <>
+                <span className="score-acc">{Math.round(board.accuracy * 100)}%</span>
+                <span className="score-sub">agent accuracy · {board.correct}/{board.total} correct</span>
+              </>
+            )}
           </div>
           <div className="score-detail">
-            <span>false positives: {board.false_positives}</span>
-            <span>false negatives: {board.false_negatives}</span>
+            {board.graded === false ? (
+              <span>real inbox · no ground truth</span>
+            ) : (
+              <>
+                <span>false positives: {board.false_positives}</span>
+                <span>false negatives: {board.false_negatives}</span>
+              </>
+            )}
             <span>driven by: the agent + SKILL.md</span>
           </div>
         </div>
