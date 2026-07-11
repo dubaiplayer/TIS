@@ -54,6 +54,10 @@ class Meta(BaseModel):
 class AnalysisReport(BaseModel):
     verdict: str = Field(description="phishing | suspicious | legitimate")
     risk_score: float = Field(ge=0.0, le=1.0)
+    action: str = Field(default="warn",
+                        description="Recommended action: quarantine | warn | allow")
+    recommendation: str = Field(default="",
+                               description="Plain-language what-to-do for the user or agent")
     summary: str = Field(description="One-line human-readable explanation")
     top_signals: List[str]
     attributes: List[AttributeReport]
@@ -78,6 +82,18 @@ def _summary(verdict, top_signals):
     return f"{blurb}."
 
 
+# Recommended action + plain-language guidance, derived from the verdict, so a
+# caller/agent gets a decision to act on (not just a score).
+_ACTION = {"phishing": "quarantine", "suspicious": "warn", "legitimate": "allow"}
+_RECOMMENDATION = {
+    "quarantine": "Do not click links, open attachments, or reply. Verify the sender "
+                  "through a separate trusted channel and report it to your security team.",
+    "warn": "Treat with caution. Do not act on any request (payment, credentials, links) "
+            "until you independently verify the sender.",
+    "allow": "No significant phishing indicators found. Apply normal caution.",
+}
+
+
 def build_report(result: dict) -> AnalysisReport:
     """Map the pipeline.analyze() dict to the validated public schema."""
     o = result["overall"]
@@ -96,9 +112,12 @@ def build_report(result: dict) -> AnalysisReport:
                               for k in cdict.get("keyword_attributions", [])],
         char_ngram_contribution=cdict.get("char_ngram_contribution"),
     )
+    action = _ACTION.get(o["verdict"], "warn")
     return AnalysisReport(
         verdict=o["verdict"],
         risk_score=o["risk_score"],
+        action=action,
+        recommendation=_RECOMMENDATION[action],
         summary=_summary(o["verdict"], o["top_signals"]),
         top_signals=o["top_signals"],
         attributes=attrs,

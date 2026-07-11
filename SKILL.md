@@ -54,11 +54,35 @@ Example response (abridged — the real response also includes every attribute, 
 Response fields:
 - `verdict` — one of `"phishing"`, `"suspicious"`, `"legitimate"`.
 - `risk_score` — number from 0.0 to 1.0.
+- `action` — recommended action: `"quarantine"`, `"warn"`, or `"allow"`. Use this to decide what to do.
+- `recommendation` — one-line plain-language guidance for the user/agent.
 - `summary` — one-line human-readable explanation.
 - `top_signals` — the strongest contributing signals, most important first.
 - `attributes` — array of all 18 attributes, each with `name`, `score` (0.0–1.0), `label`, `explanation`, and `evidence` (array of `{text, start, end}` character spans). Includes the language attributes (urgency, fear_threat, reward, curiosity, authority, financial, credential, generic_greeting, sender_domain, links, grammar, caps_tone) and the real-world detectors (sender_auth, link_deception, obfuscation, attachment_risk, bec, html_attack). Detectors that need data not present in the email report `label` starting with `"unavailable"`.
 - `classifier.phishing_probability` — the ML model's probability (0.0–1.0); `null` if the model is unavailable.
 - `meta.notes` — notes such as when a check was skipped.
+
+### POST /xray
+Optional deep link inspection. Follows each link in the email through its redirect chain to reveal the **true destination**, then reports the destination domain's **age** (a domain registered days ago is a strong phishing signal) and whether it appears on a public blocklist. Send the same `{"text": "<raw email>"}` body. This makes live outbound requests, so it is slower than `/analyze` and kept separate — call it when you want to unmask where a suspicious link really points.
+
+Example call:
+```
+curl -X POST https://phishing-analyzer-api-wq1v.onrender.com/xray \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Click http://bit.ly/verify-now to confirm."}'
+```
+Example response:
+```json
+{
+  "summary": "1 of 1 link(s) look risky when unmasked.",
+  "links": [
+    {"url": "http://bit.ly/verify-now", "final_url": "http://secure-login.xyz/auth",
+     "redirect_hops": 1, "destination_domain": "secure-login.xyz",
+     "domain_age_days": 4, "on_blocklist": false,
+     "suspicious_reasons": ["redirects to a different site (secure-login.xyz)", "destination domain is only 4 day(s) old"]}
+  ]
+}
+```
 
 ### GET /skill.md
 Returns this document as `text/markdown` (so an agent or the registry can fetch the instructions from the live URL).

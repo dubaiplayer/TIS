@@ -17,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
-from phishing_analyzer import pipeline
+from phishing_analyzer import pipeline, link_xray
 from phishing_analyzer.schema import AnalysisReport, build_report
 
 app = FastAPI(title="Phishing Analyzer API", version="1.0.0")
@@ -71,6 +71,15 @@ def analyze(req: AnalyzeRequest) -> AnalysisReport:
     """Analyze one raw email -> structured phishing report."""
     result = pipeline.analyze_raw(req.text, use_classifier=req.use_classifier)
     return build_report(result)
+
+
+@app.post("/xray")
+async def xray(req: AnalyzeRequest):
+    """Link X-ray: follow each link's redirect chain to its TRUE destination and
+    flag domain age + blocklist hits. Network-heavy and opt-in (kept out of the
+    fast/deterministic /analyze). Runs off-thread so the event loop stays free."""
+    import asyncio
+    return await asyncio.to_thread(link_xray.xray, req.text)
 
 
 def main():
