@@ -1,8 +1,8 @@
 # Phishing Email Analyzer API
 
-An HTTP service that analyzes a raw email and returns an explainable phishing verdict — an overall risk score, 16 per-attribute manipulation/threat scores with the exact evidence text, and the classifier keywords that drove the decision. Any agent handling email can call it to answer "is this email phishing, and why?"
+An HTTP service that analyzes a raw email and returns an explainable phishing verdict — an overall risk score, 18 per-attribute manipulation/threat scores with the exact evidence text, and the classifier keywords that drove the decision. Any agent handling email can call it to answer "is this email phishing, and why?"
 
-Beyond the language-manipulation attributes, it inspects real-world phishing vectors: **sender authentication** (SPF/DKIM/DMARC results + From/Reply-To/Return-Path alignment), **link deception** (link-text-vs-destination mismatch, punycode/homograph domains, brand-in-subdomain), **obfuscation** (hidden zero-width characters and homoglyph tricks), and **attachment risk** (dangerous types, double extensions, macro documents). Pass the full raw email — headers, HTML, and MIME parts included — to get these signals.
+Beyond the language-manipulation attributes, it inspects real-world phishing vectors: **sender authentication** (SPF/DKIM/DMARC results + From/Reply-To/Return-Path alignment), **link deception** (link-text-vs-destination mismatch, punycode/homograph domains, brand-in-subdomain), **obfuscation** (hidden zero-width characters and homoglyph tricks), **attachment risk** (dangerous types, double extensions, macro documents), **business email compromise** (no-link wire-transfer / gift-card / payroll fraud), and **HTML attack mechanics** (credential-harvest login forms and tracking beacons in the HTML). Pass the full raw email — headers, HTML, and MIME parts included — to get these signals.
 
 Base URL:
 https://phishing-analyzer-api-wq1v.onrender.com
@@ -56,7 +56,7 @@ Response fields:
 - `risk_score` — number from 0.0 to 1.0.
 - `summary` — one-line human-readable explanation.
 - `top_signals` — the strongest contributing signals, most important first.
-- `attributes` — array of all 16 attributes, each with `name`, `score` (0.0–1.0), `label`, `explanation`, and `evidence` (array of `{text, start, end}` character spans). Includes the language attributes (urgency, fear_threat, reward, curiosity, authority, financial, credential, generic_greeting, sender_domain, links, grammar, caps_tone) and the real-world detectors (sender_auth, link_deception, obfuscation, attachment_risk). Detectors that need data not present in the email report `label` starting with `"unavailable"`.
+- `attributes` — array of all 18 attributes, each with `name`, `score` (0.0–1.0), `label`, `explanation`, and `evidence` (array of `{text, start, end}` character spans). Includes the language attributes (urgency, fear_threat, reward, curiosity, authority, financial, credential, generic_greeting, sender_domain, links, grammar, caps_tone) and the real-world detectors (sender_auth, link_deception, obfuscation, attachment_risk, bec, html_attack). Detectors that need data not present in the email report `label` starting with `"unavailable"`.
 - `classifier.phishing_probability` — the ML model's probability (0.0–1.0); `null` if the model is unavailable.
 - `meta.notes` — notes such as when a check was skipped.
 

