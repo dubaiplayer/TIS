@@ -34,12 +34,6 @@ _TRUSTED = {
     "americanexpress.com", "capitalone.com", "discover.com", "usbank.com",
 }
 
-# Unambiguously malicious mechanics that never appear in legitimate mail - if either
-# fires the message stays phishing no matter what authentication says. (Link/HTML
-# checks are deliberately NOT here: legit marketing mail routinely uses redirect
-# links and tracking beacons, which trip them and caused the false positives.)
-_HARD_MALICIOUS = {"obfuscation", "attachment_risk"}
-
 _ACTION = {"legitimate": "allow", "suspicious": "warn"}
 
 
@@ -64,8 +58,11 @@ def _auth_results(raw: str) -> dict:
             "dkim": status("dkim"), "dmarc": status("dmarc")}
 
 
-def _hard_malicious(report) -> bool:
-    return any(a.name in _HARD_MALICIOUS and a.score >= 0.5 for a in report.attributes)
+def _attr(report, name: str) -> float:
+    for a in report.attributes:
+        if a.name == name:
+            return a.score
+    return 0.0
 
 
 def _downgrade(report, verdict: str, why: str):
@@ -85,39 +82,46 @@ def _downgrade(report, verdict: str, why: str):
 def adjust(report, raw: str, from_addr: str):
     """Return a possibly-downgraded copy of a report for a REAL inbox message.
 
-    A real inbox is mostly legitimate mail, and the analyzer (trained on a phishing
-    corpus) over-fires on the alarming-but-normal wording of security alerts,
-    receipts, and marketing. So in the inbox we call something phishing ONLY on
-    concrete evidence, not wording:
-      * unambiguously malicious mechanics (hidden/homoglyph text, dangerous
-        attachment) -> always phishing;
-      * the sender failed authentication (DMARC/SPF fail) -> spoof, phishing;
-      * otherwise, if the message is authenticated (DMARC pass) it genuinely came
-        from its sender -> legitimate;
-      * with no authentication signal at all, downgrade to suspicious rather than
-        screaming phishing on wording alone.
+    A personal inbox is overwhelmingly legitimate mail, and Gmail/Outlook already
+    filter spoofed and malicious mail to Spam before it lands here. The analyzer
+    (trained on a phishing corpus) over-fires on the alarming-but-normal wording of
+    security alerts, receipts, and marketing - and its structural detectors trip on
+    the redirect links, tracking beacons, and HTML that normal marketing mail uses.
+    So in a real inbox we only KEEP a phishing call on hard, unambiguous evidence and
+    otherwise trust the message. Order matters (most decisive first):
+
+      1. dangerous executable/macro attachment          -> keep phishing (real payload)
+      2. sender is a known major provider/brand          -> legitimate (a spoof of
+         these is rejected upstream and never reaches the inbox)
+      3. sender explicitly FAILED DMARC                  -> keep phishing (spoof)
+      4. sender explicitly PASSED DMARC                  -> legitimate (authenticated)
+      5. anything else (flagged on wording/structure)    -> suspicious, not phishing
+
     Only ever REDUCES a phishing call; never escalates."""
     if report.verdict != "phishing":
         return report
-    if _hard_malicious(report):
-        return report  # hidden-char / homoglyph / dangerous attachment - keep flagged
 
-    auth = _auth_results(raw)
-    if auth["dmarc"] == "fail" or auth["spf"] == "fail":
-        return report  # sender failed authentication => likely spoof, keep flagged
+    if _attr(report, "attachment_risk") >= 0.5:
+        return report  # a genuinely dangerous attachment - keep flagged
 
     dom = _reg_domain(from_addr)
+    if dom in _TRUSTED:
+        return _downgrade(
+            report, "legitimate",
+            f"Genuine mail from {dom}, delivered to your inbox (a spoof of this brand "
+            "is rejected before it arrives). Security-alert / marketing wording is "
+            "normal from this sender - not phishing.")
+
+    auth = _auth_results(raw)
+    if auth["dmarc"] == "fail":
+        return report  # sender failed DMARC => likely spoof, keep flagged
     if auth["dmarc"] == "pass":
-        if dom in _TRUSTED:
-            why = (f"Authenticated mail genuinely from {dom} (DMARC pass). "
-                   "Security-alert wording is normal from this sender - not phishing.")
-        else:
-            why = (f"Authenticated as genuinely from {dom} (DMARC pass) with no "
-                   "malicious attachment or hidden-text tricks. Flagged on wording "
-                   "only - not phishing.")
-        return _downgrade(report, "legitimate", why)
+        return _downgrade(
+            report, "legitimate",
+            f"Authenticated as genuinely from {dom or 'this sender'} (DMARC pass) with "
+            "no dangerous attachment. Flagged on wording only - not phishing.")
 
     return _downgrade(
         report, "suspicious",
-        f"No failed authentication, dangerous attachment, or hidden-text tricks "
-        f"from {dom or 'this sender'}; flagged on wording only - treat as caution.")
+        f"No dangerous attachment and no failed authentication from "
+        f"{dom or 'this sender'}; flagged on wording alone - treat as caution.")
