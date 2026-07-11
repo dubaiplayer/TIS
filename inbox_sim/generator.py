@@ -15,6 +15,7 @@ Public API:
       each: {id, raw_email, truth_label ("phishing"|"legitimate"), subtype, from, subject}
 """
 import random
+from email.utils import parseaddr
 
 FIRST = ["James", "Mary", "David", "Sarah", "Michael", "Linda", "Robert", "Emma",
          "John", "Grace", "Daniel", "Aisha", "Tunde", "Chen", "Olga", "Ben"]
@@ -62,11 +63,17 @@ def _t_credential(rng):
     subj = rng.choice([f"URGENT: verify your {brand} account",
                        "Unusual sign-in activity detected",
                        "Action required: confirm your identity"])
-    link = rng.choice(SHORTENERS).format(c=_code(rng))
-    body = (f"Dear Customer,\n\nWe detected unusual activity on your {brand} account. "
-            f"For your security it has been temporarily suspended. You must verify your "
-            f"account within 24 hours or it will be permanently blocked.\n\n"
-            f"Click here to sign in and confirm your identity: {link}\n\n{brand} Security Team")
+    evil = rng.choice(LOOKALIKE)
+    # HTML body: the link TEXT names the real brand domain, the href points elsewhere
+    # (fires link_deception on top of the credential/fear/urgency language).
+    body = (f"<html><body>"
+            f"<p>Dear Customer,</p>"
+            f"<p>We detected unusual activity on your {brand} account. For your security "
+            f"it has been temporarily suspended. You must verify your account within 24 "
+            f"hours or it will be permanently blocked.</p>"
+            f'<p><a href="http://{evil}/login">Sign in to {brand.lower()}.com to confirm '
+            f"your identity</a></p>"
+            f"<p>{brand} Security Team</p></body></html>")
     return frm, subj, body
 
 
@@ -185,7 +192,24 @@ def generate_inbox(n=8, malicious_ratio=0.5, seed=None):
     def make(pool, label):
         subtype, fn = rng.choice(pool)
         frm, subj, body = fn(rng)
-        raw = f"From: {frm}\nSubject: {subj}\n\n{body}"
+        _, addr = parseaddr(frm)
+        hdrs = [f"From: {frm}"]
+        if label == "phishing":
+            # spoofed: failing auth + replies/bounces redirected to the attacker
+            atk = f"recovery{rng.randint(1, 99)}@{rng.choice(LOOKALIKE + FREEMAIL)}"
+            hdrs.append(f"Reply-To: <{atk}>")
+            hdrs.append(f"Return-Path: <bounce@{rng.choice(LOOKALIKE)}>")
+            res = rng.choice(["spf=fail; dkim=fail; dmarc=fail",
+                              "spf=softfail; dkim=none; dmarc=fail",
+                              "spf=fail; dkim=pass; dmarc=fail"])
+            hdrs.append(f"Authentication-Results: mx.google.com; {res}")
+        else:
+            hdrs.append(f"Return-Path: <{addr}>")
+            hdrs.append("Authentication-Results: mx.google.com; spf=pass; dkim=pass; dmarc=pass")
+        hdrs.append(f"Subject: {subj}")
+        if body.lstrip().startswith("<"):
+            hdrs.append("Content-Type: text/html")
+        raw = "\n".join(hdrs) + "\n\n" + body
         return {"raw_email": raw, "truth_label": label, "subtype": subtype,
                 "from": frm, "subject": subj}
 

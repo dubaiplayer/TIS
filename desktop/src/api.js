@@ -69,3 +69,35 @@ export async function simRun({ n = 8, malicious_ratio = 0.5, seed = null, use_ag
 export function simStreamUrl(runId) {
   return `${BASE}/sim/stream/${runId}`;
 }
+
+// ---- Live Agent (headless Claude Code reads a local SKILL.md, calls /analyze) ----
+
+export async function agentStatus() {
+  try {
+    const r = await fetch(`${BASE}/agent/status`);
+    return r.ok ? r.json() : { available: false };
+  } catch {
+    return { available: false, unreachable: true };
+  }
+}
+
+export async function agentRun({ n = 6, malicious_ratio = 0.5, seed = null } = {}) {
+  let res;
+  try {
+    res = await fetch(`${BASE}/agent/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ n, malicious_ratio, seed }),
+    });
+  } catch {
+    throw new ServerDownError(
+      "Can't reach the analyzer server on 127.0.0.1:8008. Start the Python backend first."
+    );
+  }
+  if (!res.ok) throw new Error(`Agent run failed (HTTP ${res.status}).`);
+  return res.json();
+}
+
+export function agentStreamUrl(runId) {
+  return `${BASE}/agent/stream/${runId}`;
+}

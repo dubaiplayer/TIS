@@ -5,6 +5,7 @@ import AttributeBarChart from "./components/AttributeBarChart";
 import KeywordHighlight from "./components/KeywordHighlight";
 import AttributeList from "./components/AttributeList";
 import InboxSimulator from "./components/InboxSimulator";
+import AgentInbox from "./components/AgentInbox";
 
 const AUTO_DELAY = 800; // ms after typing/paste stops
 
@@ -64,6 +65,8 @@ export default function App() {
         <div className="tabs">
           <button className={view === "analyze" ? "seg on" : "seg"}
                   onClick={() => setView("analyze")}>Analyze</button>
+          <button className={view === "agent" ? "seg on" : "seg"}
+                  onClick={() => setView("agent")}>Live Agent</button>
           <button className={view === "inbox" ? "seg on" : "seg"}
                   onClick={() => setView("inbox")}>Inbox Sim</button>
         </div>
@@ -85,7 +88,9 @@ export default function App() {
         </div>
       )}
 
-      {view === "inbox" ? (
+      {view === "agent" ? (
+        <AgentInbox />
+      ) : view === "inbox" ? (
         <InboxSimulator />
       ) : (
         <>

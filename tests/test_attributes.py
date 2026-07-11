@@ -121,6 +121,6 @@ def test_pipeline_ranks_phish_above_legit():
     assert phish["overall"]["verdict"] in ("phishing", "suspicious")
     assert legit["overall"]["verdict"] == "legitimate"
     # structure sanity
-    assert len(phish["attributes"]) == 12
+    assert len(phish["attributes"]) == 16
     assert all({"name", "score", "label", "explanation", "evidence_spans"} <= a.keys()
                for a in phish["attributes"])

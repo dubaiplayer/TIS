@@ -123,3 +123,22 @@ body {
 .src-tag { font-size: 10px; color: #86efac; background: rgba(34,197,94,.12);
            border: 1px solid rgba(34,197,94,.3); border-radius: 8px; padding: 1px 6px; }
 .mail-body { border-top: 1px solid var(--border); padding: 10px 12px; display: flex; flex-direction: column; gap: 10px; }
+
+/* ---- live agent view ---- */
+.agent-grid { display: grid; grid-template-columns: 1fr 300px; gap: 10px; align-items: start; }
+@media (max-width: 720px) { .agent-grid { grid-template-columns: 1fr; } }
+
+.agent-feed-wrap { background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+                   overflow: hidden; position: sticky; top: 0; }
+.agent-feed-title { padding: 8px 12px; font-weight: 600; font-size: 12px;
+                    border-bottom: 1px solid var(--border); color: var(--text); }
+.agent-feed { max-height: 420px; overflow-y: auto; padding: 8px 10px; display: flex;
+              flex-direction: column; gap: 4px; font-family: ui-monospace, "Cascadia Code", monospace;
+              font-size: 11px; line-height: 1.5; }
+.feed-line { color: #cbd5e1; word-break: break-word; }
+.feed-kind { display: inline-block; min-width: 46px; color: var(--muted); text-transform: uppercase;
+             font-size: 9px; letter-spacing: .4px; }
+.feed-bash .feed-kind { color: #7dd3fc; }
+.feed-read .feed-kind, .feed-glob .feed-kind { color: #a5b4fc; }
+.feed-system .feed-kind, .feed-start .feed-kind { color: #86efac; }
+.feed-text { color: #e5e9f0; }

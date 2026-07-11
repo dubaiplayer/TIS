@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 from phishing_analyzer import pipeline
 from phishing_analyzer.schema import AnalysisReport, build_report
 from inbox_sim.generator import generate_inbox
-from server import sim_agent
+from server import sim_agent, agent_runner
 
 app = FastAPI(title="Phishing Analyzer API", version="1.0.0")
 
@@ -177,6 +177,67 @@ def sim_run_all(req: SimRunRequest):
                         "report": report.model_dump()})
     return {"count": len(inbox), "correct": correct,
             "accuracy": round(correct / len(inbox), 4) if inbox else 0.0, "results": results}
+
+
+# ---------------------------------------------------------------------------
+# Live Agent (headless Claude Code reads a local SKILL.md, calls THIS /analyze)
+# ---------------------------------------------------------------------------
+_AGENT_RUNS = {}
+
+
+@app.get("/agent/status")
+def agent_status():
+    """Whether the headless-agent mode is usable (claude CLI on PATH)."""
+    return {"available": agent_runner.claude_cli_available()}
+
+
+@app.post("/agent/run")
+def agent_run(req: SimRunRequest):
+    """Generate a random inbox; return a run_id + display list (with raw_email so
+    the GUI can fetch the full breakdown on expand)."""
+    inbox = generate_inbox(req.n, req.malicious_ratio, seed=req.seed)
+    run_id = uuid.uuid4().hex
+    _AGENT_RUNS[run_id] = {"inbox": inbox}
+    display = [{"id": it["id"], "file": f"email_{it['id']:02d}.txt",
+                "from": it["from"], "subject": it["subject"],
+                "raw_email": it["raw_email"]} for it in inbox]
+    return {"run_id": run_id, "available": agent_runner.claude_cli_available(),
+            "count": len(inbox), "inbox": display}
+
+
+async def _agent_events(run_id):
+    run = _AGENT_RUNS.get(run_id)
+    if not run:
+        yield _sse({"type": "error", "error": "unknown run_id"})
+        return
+    inbox = run["inbox"]
+    truth = {f"email_{it['id']:02d}.txt": it["truth_label"] for it in inbox}
+    total = correct = fp = fn = 0
+    async for ev in agent_runner.run_agent_events(inbox):
+        if ev.get("type") == "email":
+            f, v = ev.get("file"), ev.get("verdict")
+            tl = truth.get(f)
+            pred = _predicted_label(v) if v else None
+            ok = (pred == tl) if (pred and tl) else None
+            if ok is not None:
+                total += 1
+                correct += ok
+                fp += (not ok and pred == "phishing")
+                fn += (not ok and pred == "legitimate")
+            yield _sse({"type": "email", "file": f, "verdict": v, "risk": ev.get("risk"),
+                        "truth_label": tl, "correct": ok})
+        elif ev.get("type") == "done":
+            yield _sse({"type": "scoreboard", "total": total, "correct": correct,
+                        "accuracy": round(correct / total, 4) if total else 0.0,
+                        "false_positives": fp, "false_negatives": fn})
+        else:
+            yield _sse(ev)  # activity / error pass-through
+
+
+@app.get("/agent/stream/{run_id}")
+def agent_stream(run_id: str):
+    """SSE: live agent activity + per-email verdicts, then a final scoreboard."""
+    return StreamingResponse(_agent_events(run_id), media_type="text/event-stream")
 
 
 def main():

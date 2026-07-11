@@ -22,6 +22,12 @@ attribute_weights:
   links: 1.2
   grammar: 0.35        # unreliable here (corporate-jargon false positives)
   caps_tone: 0.5       # non-discriminative here
+  # Real-world detectors (headers/HTML/attachments). High-signal in the wild; the
+  # 0.6 reliability ceiling still keeps any single one below a phishing verdict.
+  sender_auth: 1.5
+  link_deception: 1.4
+  obfuscation: 1.2
+  attachment_risk: 1.3
 
 # A SINGLE rule attribute should top out at "suspicious", not "phishing": only
 # the classifier (or several corroborating attributes) can reach a phishing
@@ -47,4 +53,4 @@ verdict_thresholds:
 
 # Attributes excluded from the vote when uncomputable (e.g. sender_domain with no
 # sender header) so absence of evidence isn't treated as evidence of safety.
-skip_when_unavailable: [sender_domain]
+skip_when_unavailable: [sender_domain, sender_auth, attachment_risk]
