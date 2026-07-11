@@ -241,11 +241,23 @@ async def _agent_events(run_id):
         return
     inbox = run["inbox"]
     graded = run.get("graded", True)
-    truth = {f"email_{it['id']:02d}.txt": it.get("truth_label") for it in inbox}
+    by_file = {f"email_{it['id']:02d}.txt": it for it in inbox}
+    truth = {f: it.get("truth_label") for f, it in by_file.items()}
     total = correct = fp = fn = flagged = 0
     async for ev in agent_runner.run_agent_events(inbox):
         if ev.get("type") == "email":
-            f, v = ev.get("file"), ev.get("verdict")
+            f = ev.get("file")
+            it = by_file.get(f)
+            if it is not None:
+                # Authoritative verdict comes from the SAME deterministic /analyze the
+                # expanded breakdown uses, keyed off this email's own text. The agent's
+                # self-reported verdict can misassociate to the wrong file; this keeps
+                # the row, the ground-truth grade, and the drill-down perfectly in sync.
+                rep = await asyncio.to_thread(
+                    lambda raw=it["raw_email"]: build_report(pipeline.analyze_raw(raw)))
+                v, risk = rep.verdict, rep.risk_score
+            else:
+                v, risk = ev.get("verdict"), ev.get("risk")
             tl = truth.get(f)
             pred = _predicted_label(v) if v else None
             if pred is not None:
@@ -259,7 +271,7 @@ async def _agent_events(run_id):
                 fn += (not ok and pred == "legitimate")
             else:
                 ok = None
-            yield _sse({"type": "email", "file": f, "verdict": v, "risk": ev.get("risk"),
+            yield _sse({"type": "email", "file": f, "verdict": v, "risk": risk,
                         "truth_label": tl, "correct": ok})
         elif ev.get("type") == "done":
             if graded:
