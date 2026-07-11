@@ -6,7 +6,7 @@
 // agent + SKILL.md flow is identical either way. Activity streams on the right,
 // verdicts fill in on the left, and any email expands to the full breakdown.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { agentRun, agentStreamUrl, analyzeEmail, quarantine, ServerDownError } from "../api";
+import { agentRun, agentStreamUrl, analyzeEmail, analyzeInboxEmail, quarantine, ServerDownError } from "../api";
 import RiskBanner from "./RiskBanner";
 import AttributeBarChart from "./AttributeBarChart";
 import KeywordHighlight from "./KeywordHighlight";
@@ -100,7 +100,11 @@ export default function AgentInbox() {
     setExpanded(next);
     if (next && !reports[r.file] && r.raw_email) {
       try {
-        const rep = await analyzeEmail(r.raw_email);
+        // Real inbox rows go through the sender-auth trust adjustment so the
+        // drill-down matches the row (and legit provider mail isn't miscalled).
+        const rep = source === "gmail"
+          ? await analyzeInboxEmail(r.raw_email, r.from)
+          : await analyzeEmail(r.raw_email);
         setReports((prev) => ({ ...prev, [r.file]: rep }));
       } catch { /* leave unexpanded content */ }
     }

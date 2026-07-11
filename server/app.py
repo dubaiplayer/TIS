@@ -23,7 +23,7 @@ from pydantic import BaseModel, Field
 from phishing_analyzer import pipeline, link_xray
 from phishing_analyzer.schema import AnalysisReport, build_report
 from inbox_sim.generator import generate_inbox
-from server import sim_agent, agent_runner, mailbox
+from server import sim_agent, agent_runner, mailbox, gmail_triage
 
 app = FastAPI(title="Phishing Analyzer API", version="1.0.0")
 
@@ -52,6 +52,21 @@ def health():
 def analyze(req: AnalyzeRequest) -> AnalysisReport:
     result = pipeline.analyze_raw(req.text, use_classifier=req.use_classifier)
     return build_report(result)
+
+
+class InboxAnalyzeRequest(BaseModel):
+    text: str = Field(description="Raw email fetched from a real mailbox")
+    from_addr: str = Field(default="", description="The message's From address")
+
+
+@app.post("/analyze/inbox", response_model=AnalysisReport)
+def analyze_inbox(req: InboxAnalyzeRequest) -> AnalysisReport:
+    """Same analyzer as /analyze, plus the real-inbox trust adjustment that keeps
+    authenticated provider mail (e.g. genuine Google security alerts) from being
+    miscalled phishing on wording alone. Used only by the Gmail/Outlook view - the
+    paste-in /analyze and the sims are untouched."""
+    rep = build_report(pipeline.analyze_raw(req.text))
+    return gmail_triage.adjust(rep, req.text, req.from_addr)
 
 
 @app.post("/xray")
@@ -286,6 +301,8 @@ async def _agent_events(run_id):
                 # the row, the ground-truth grade, and the drill-down perfectly in sync.
                 rep = await asyncio.to_thread(
                     lambda raw=it["raw_email"]: build_report(pipeline.analyze_raw(raw)))
+                if not graded:  # real Gmail/Outlook inbox: suppress buzzword-only
+                    rep = gmail_triage.adjust(rep, it["raw_email"], it.get("from", ""))
                 v, risk = rep.verdict, rep.risk_score
             else:
                 v, risk = ev.get("verdict"), ev.get("risk")

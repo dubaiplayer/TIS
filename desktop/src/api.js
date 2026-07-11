@@ -109,6 +109,21 @@ export function agentStreamUrl(runId) {
   return `${BASE}/agent/stream/${runId}`;
 }
 
+// ---- Inbox-aware analyze (real Gmail/Outlook messages; adds sender-auth trust) ----
+export async function analyzeInboxEmail(text, from_addr = "") {
+  let res;
+  try {
+    res = await fetch(`${BASE}/analyze/inbox`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, from_addr }),
+    });
+  } catch {
+    throw new ServerDownError("Can't reach the analyzer server on 127.0.0.1:8008.");
+  }
+  if (!res.ok) throw new Error(`Analyze failed (HTTP ${res.status}).`);
+  return res.json();
+}
+
 // ---- Link X-ray (unmask where links really go) ----
 export async function xrayEmail(text) {
   let res;
