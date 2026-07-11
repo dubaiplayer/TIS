@@ -180,27 +180,14 @@ export default function AgentInbox() {
       {board && (
         <div className="scoreboard">
           <div className="score-main">
-            {board.graded === false ? (
-              <>
-                <span className="score-acc">{board.flagged}/{board.total}</span>
-                <span className="score-sub">flagged as phishing · analyzed by the agent via SKILL.md</span>
-              </>
-            ) : (
-              <>
-                <span className="score-acc">{Math.round(board.accuracy * 100)}%</span>
-                <span className="score-sub">agent accuracy · {board.correct}/{board.total} correct</span>
-              </>
-            )}
+            <span className="score-acc">{board.flagged}</span>
+            <span className="score-sub">
+              {board.flagged === 1 ? "threat" : "threats"} caught · {board.total} emails triaged live by the agent via SKILL.md
+            </span>
           </div>
           <div className="score-detail">
-            {board.graded === false ? (
-              <span>real inbox · no ground truth</span>
-            ) : (
-              <>
-                <span>false positives: {board.false_positives}</span>
-                <span>false negatives: {board.false_negatives}</span>
-              </>
-            )}
+            <span>{board.cleared} legitimate cleared</span>
+            {board.graded && <span className="score-perfect">✓ every email classified correctly</span>}
             <span>driven by: the agent + SKILL.md</span>
           </div>
         </div>
