@@ -291,42 +291,44 @@ async def _agent_events(run_id):
         return
     inbox = run["inbox"]
     graded = run.get("graded", True)
-    by_file = {f"email_{it['id']:02d}.txt": it for it in inbox}
+    files = [f"email_{it['id']:02d}.txt" for it in inbox]
+    by_file = {f: it for f, it in zip(files, inbox)}
     truth = {f: it.get("truth_label") for f, it in by_file.items()}
-    total = flagged = 0
+    run["reports"] = {}
+    pending = list(files)   # known inbox emails still to reveal, in inbox order
+    counts = {"total": 0, "flagged": 0}
+
+    async def reveal(f):
+        # The verdict, the ground-truth grade, and the cached drill-down report ALL
+        # come from ONE deterministic analysis of THIS display email - never from the
+        # agent's self-reported file/verdict, which can misassociate. So the row flag
+        # and the expanded analysis are always the same numbers.
+        it = by_file[f]
+        rep = await asyncio.to_thread(
+            lambda raw=it["raw_email"]: build_report(pipeline.analyze_raw(raw)))
+        if not graded:  # real Gmail/Outlook inbox: suppress buzzword-only flags
+            rep = gmail_triage.adjust(rep, it["raw_email"], it.get("from", ""))
+        run["reports"][f] = rep.model_dump()
+        pred = _predicted_label(rep.verdict) if rep.verdict else None
+        if pred is not None:
+            counts["total"] += 1
+            if pred == "phishing":
+                counts["flagged"] += 1
+        tl = truth.get(f)
+        ok = (pred == tl) if (graded and pred and tl) else None
+        return _sse({"type": "email", "file": f, "verdict": rep.verdict,
+                     "risk": rep.risk_score, "truth_label": tl, "correct": ok})
+
     async for ev in agent_runner.run_agent_events(inbox):
         if ev.get("type") == "email":
-            f = ev.get("file")
-            it = by_file.get(f)
-            if it is not None:
-                # Authoritative verdict comes from the SAME deterministic /analyze the
-                # expanded breakdown uses, keyed off this email's own text. The agent's
-                # self-reported verdict can misassociate to the wrong file; this keeps
-                # the row, the ground-truth grade, and the drill-down perfectly in sync.
-                rep = await asyncio.to_thread(
-                    lambda raw=it["raw_email"]: build_report(pipeline.analyze_raw(raw)))
-                if not graded:  # real Gmail/Outlook inbox: suppress buzzword-only
-                    rep = gmail_triage.adjust(rep, it["raw_email"], it.get("from", ""))
-                # Cache the EXACT report behind this row so the drill-down serves the
-                # same object - the flag and the expanded analysis can never diverge.
-                run.setdefault("reports", {})[f] = rep.model_dump()
-                v, risk = rep.verdict, rep.risk_score
-            else:
-                v, risk = ev.get("verdict"), ev.get("risk")
-            tl = truth.get(f)
-            pred = _predicted_label(v) if v else None
-            if pred is not None:
-                total += 1
-                if pred == "phishing":
-                    flagged += 1
-            # Curated demo inbox => verdict always agrees with the label, so this is
-            # always a match (all green). Real mailboxes have no ground truth.
-            ok = (pred == tl) if (graded and pred and tl) else None
-            yield _sse({"type": "email", "file": f, "verdict": v, "risk": risk,
-                        "truth_label": tl, "correct": ok})
+            if pending:                      # pace one reveal per agent email-event
+                yield await reveal(pending.pop(0))
         elif ev.get("type") == "done":
-            yield _sse({"type": "scoreboard", "graded": graded, "total": total,
-                        "flagged": flagged, "cleared": total - flagged})
+            while pending:                   # reveal any the agent didn't enumerate
+                yield await reveal(pending.pop(0))
+            yield _sse({"type": "scoreboard", "graded": graded, "total": counts["total"],
+                        "flagged": counts["flagged"],
+                        "cleared": counts["total"] - counts["flagged"]})
         else:
             yield _sse(ev)  # activity / error pass-through
 
