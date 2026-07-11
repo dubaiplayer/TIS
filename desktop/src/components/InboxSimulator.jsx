@@ -11,7 +11,7 @@ import AttributeBarChart from "./AttributeBarChart";
 import KeywordHighlight from "./KeywordHighlight";
 import AttributeList from "./AttributeList";
 
-const VERDICT_COLOR = { phishing: "#ef4444", suspicious: "#f59e0b", legitimate: "#22c55e" };
+const VERDICT_COLOR = { phishing: "#ff453a", suspicious: "#ff9f0a", legitimate: "#30d158" };
 const N = 8;
 
 export default function InboxSimulator() {

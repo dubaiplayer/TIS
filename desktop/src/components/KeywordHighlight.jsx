@@ -32,7 +32,7 @@ function Highlighted({ text, keywords }) {
     if (s.start > cur) parts.push(<span key={`t${i}`}>{text.slice(cur, s.start)}</span>);
     parts.push(
       <mark key={`m${i}`} className="kw-mark"
-            style={{ background: `rgba(239,68,68,${0.25 + 0.55 * s.intensity})` }}
+            style={{ background: `rgba(255,69,58,${0.25 + 0.55 * s.intensity})` }}
             title={`contribution intensity ${s.intensity.toFixed(2)}`}>
         {text.slice(s.start, s.end)}
       </mark>

@@ -1,8 +1,8 @@
 // Color-coded overall verdict banner + risk meter.
 const VERDICT_STYLE = {
-  phishing: { bg: "#3a1416", border: "#ef4444", label: "PHISHING", fg: "#fca5a5" },
-  suspicious: { bg: "#3a2f14", border: "#f59e0b", label: "SUSPICIOUS", fg: "#fcd34d" },
-  legitimate: { bg: "#12301f", border: "#22c55e", label: "LEGITIMATE", fg: "#86efac" },
+  phishing: { bg: "rgba(255,69,58,0.12)", border: "#ff453a", label: "PHISHING", fg: "#ff6b6b" },
+  suspicious: { bg: "rgba(255,159,10,0.12)", border: "#ff9f0a", label: "SUSPICIOUS", fg: "#ffcf70" },
+  legitimate: { bg: "rgba(48,209,88,0.12)", border: "#30d158", label: "LEGITIMATE", fg: "#5be584" },
 };
 
 export default function RiskBanner({ report }) {

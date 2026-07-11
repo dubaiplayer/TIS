@@ -11,10 +11,10 @@ import {
 } from "recharts";
 
 function color(score) {
-  if (score >= 0.66) return "#ef4444";
-  if (score >= 0.33) return "#f59e0b";
-  if (score > 0) return "#eab308";
-  return "#3f4956";
+  if (score >= 0.66) return "#ff453a";
+  if (score >= 0.33) return "#ff9f0a";
+  if (score > 0) return "#ffd60a";
+  return "#3a3a3c";
 }
 
 export default function AttributeBarChart({ attributes }) {
@@ -27,13 +27,13 @@ export default function AttributeBarChart({ attributes }) {
       <h3>Attribute scores</h3>
       <ResponsiveContainer width="100%" height={Math.max(260, data.length * 26)}>
         <BarChart layout="vertical" data={data} margin={{ left: 8, right: 24 }}>
-          <XAxis type="number" domain={[0, 1]} tick={{ fill: "#8b98a8", fontSize: 11 }} />
+          <XAxis type="number" domain={[0, 1]} tick={{ fill: "#98989d", fontSize: 11 }} />
           <YAxis type="category" dataKey="name" width={120}
-                 tick={{ fill: "#c3ccd8", fontSize: 11 }} />
+                 tick={{ fill: "#c7c7cc", fontSize: 11 }} />
           <Tooltip
-            cursor={{ fill: "rgba(255,255,255,0.04)" }}
-            contentStyle={{ background: "#1a2230", border: "1px solid #2b3648",
-                            borderRadius: 8, color: "#e5e9f0" }}
+            cursor={{ fill: "rgba(255,255,255,0.05)" }}
+            contentStyle={{ background: "#2c2c2e", border: "1px solid rgba(255,255,255,0.12)",
+                            borderRadius: 10, color: "#f5f5f7" }}
             formatter={(v, _n, p) => [`${v}  (${p.payload.label})`, "score"]}
           />
           <Bar dataKey="score" radius={[0, 4, 4, 0]} isAnimationActive={false}>
