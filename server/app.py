@@ -43,10 +43,19 @@ class AnalyzeRequest(BaseModel):
     use_classifier: bool = True
 
 
+BUILD = "2026-07-11-consistency-v3"
+
+
 @app.get("/health")
 def health():
     """Cheap readiness check the app pings before enabling Analyze."""
-    return {"status": "ok"}
+    return {"status": "ok", "build": BUILD}
+
+
+@app.get("/version")
+def version():
+    """Confirms which build is running (so a stale process is easy to spot)."""
+    return {"build": BUILD}
 
 
 @app.post("/analyze", response_model=AnalysisReport)
@@ -344,8 +353,19 @@ def agent_run(req: AgentRunRequest):
         inbox = _consistent_inbox(req.n, req.malicious_ratio, req.seed)
         graded = True
     run_id = uuid.uuid4().hex
-    _AGENT_RUNS[run_id] = {"inbox": inbox, "graded": graded,
-                           "source": req.source, "state": req.state}
+    # Pre-compute every email's FINAL report up front, keyed by its display file.
+    # The row flag, the grade, and the drill-down all read from this one dict, so
+    # they are the same numbers by construction - the agent's stream only paces the
+    # reveal, it never supplies a verdict.
+    reports = {}
+    for it in inbox:
+        f = f"email_{it['id']:02d}.txt"
+        rep = build_report(pipeline.analyze_raw(it["raw_email"]))
+        if not graded:  # real Gmail/Outlook inbox: sender-auth trust adjustment
+            rep = gmail_triage.adjust(rep, it["raw_email"], it.get("from", ""))
+        reports[f] = rep.model_dump()
+    _AGENT_RUNS[run_id] = {"inbox": inbox, "graded": graded, "source": req.source,
+                           "state": req.state, "reports": reports}
     display = [{"id": it["id"], "file": f"email_{it['id']:02d}.txt",
                 "from": it["from"], "subject": it["subject"],
                 "raw_email": it["raw_email"]} for it in inbox]
@@ -361,40 +381,33 @@ async def _agent_events(run_id):
     inbox = run["inbox"]
     graded = run.get("graded", True)
     files = [f"email_{it['id']:02d}.txt" for it in inbox]
-    by_file = {f: it for f, it in zip(files, inbox)}
-    truth = {f: it.get("truth_label") for f, it in by_file.items()}
-    run["reports"] = {}
-    pending = list(files)   # known inbox emails still to reveal, in inbox order
+    truth = {f"email_{it['id']:02d}.txt": it.get("truth_label") for it in inbox}
+    reports = run["reports"]   # pre-computed in /agent/run; the ONE source of truth
+    pending = list(files)      # known inbox emails still to reveal, in inbox order
     counts = {"total": 0, "flagged": 0}
 
-    async def reveal(f):
-        # The verdict, the ground-truth grade, and the cached drill-down report ALL
-        # come from ONE deterministic analysis of THIS display email - never from the
-        # agent's self-reported file/verdict, which can misassociate. So the row flag
-        # and the expanded analysis are always the same numbers.
-        it = by_file[f]
-        rep = await asyncio.to_thread(
-            lambda raw=it["raw_email"]: build_report(pipeline.analyze_raw(raw)))
-        if not graded:  # real Gmail/Outlook inbox: suppress buzzword-only flags
-            rep = gmail_triage.adjust(rep, it["raw_email"], it.get("from", ""))
-        run["reports"][f] = rep.model_dump()
-        pred = _predicted_label(rep.verdict) if rep.verdict else None
+    def reveal(f):
+        # The row flag, the ground-truth grade, and the drill-down report are the SAME
+        # pre-computed report for THIS display file. The agent's stream only paces the
+        # reveal; it never supplies a verdict, so nothing can misassociate.
+        rep = reports[f]
+        pred = _predicted_label(rep["verdict"]) if rep["verdict"] else None
         if pred is not None:
             counts["total"] += 1
             if pred == "phishing":
                 counts["flagged"] += 1
         tl = truth.get(f)
         ok = (pred == tl) if (graded and pred and tl) else None
-        return _sse({"type": "email", "file": f, "verdict": rep.verdict,
-                     "risk": rep.risk_score, "truth_label": tl, "correct": ok})
+        return _sse({"type": "email", "file": f, "verdict": rep["verdict"],
+                     "risk": rep["risk_score"], "truth_label": tl, "correct": ok})
 
     async for ev in agent_runner.run_agent_events(inbox):
         if ev.get("type") == "email":
             if pending:                      # pace one reveal per agent email-event
-                yield await reveal(pending.pop(0))
+                yield reveal(pending.pop(0))
         elif ev.get("type") == "done":
             while pending:                   # reveal any the agent didn't enumerate
-                yield await reveal(pending.pop(0))
+                yield reveal(pending.pop(0))
             yield _sse({"type": "scoreboard", "graded": graded, "total": counts["total"],
                         "flagged": counts["flagged"],
                         "cleared": counts["total"] - counts["flagged"]})

@@ -103,18 +103,15 @@ export default function AgentInbox() {
     setExpanded(next);
     if (next && !reports[r.file] && r.raw_email) {
       try {
-        // Prefer the EXACT report the row flag was computed from, so the flag and
-        // the drill-down can never disagree (incl. the Gmail sender-auth trust
-        // adjustment). Fall back to a fresh analyze only if the cache is missing.
-        let rep = null;
-        if (runId) {
-          try { rep = await agentReport(runId, r.file); } catch { rep = null; }
-        }
-        if (!rep) {
-          rep = source === "gmail_oauth"
-            ? await analyzeInboxEmail(r.raw_email, r.from)
-            : await analyzeEmail(r.raw_email);
-        }
+        // The drill-down shows the EXACT report the row flag came from - never a
+        // fresh re-analysis, which is what used to diverge. For an agent run we only
+        // ever read the cached report; if it's somehow missing we leave it unexpanded
+        // rather than render a contradictory verdict.
+        const rep = runId
+          ? await agentReport(runId, r.file)
+          : (source === "gmail_oauth"
+              ? await analyzeInboxEmail(r.raw_email, r.from)
+              : await analyzeEmail(r.raw_email));
         setReports((prev) => ({ ...prev, [r.file]: rep }));
       } catch { /* leave unexpanded content */ }
     }
