@@ -3,7 +3,7 @@ Read SKILL.md in this folder and follow it exactly — it documents a hosted phi
 Then do all of this automatically, without asking me anything:
 
 1. Warm up the service first with GET /health. It is a free-tier host and may cold-start for up to 60 seconds; if it does not return {"status":"ok"}, wait and retry once.
-2. For every .txt file in the inbox/ folder, read the file and send its FULL contents to the API via POST /analyze exactly as the skill describes. Take each email's `verdict` and `risk_score` from the JSON response.
+2. For every .txt file in the inbox/ folder, read the file and send its FULL contents to the API via POST /analyze exactly as the skill describes. Make the HTTP requests using curl or python. Take each email's `verdict` and `risk_score` from the JSON response.
 3. Do NOT decide phishing yourself — the verdict must come only from the API response, never from your own judgment.
 4. When all emails are done, read labels.json (the ground-truth labels) and print a table with one row per email: filename | API verdict | risk_score | ground truth | correct? — then print the overall accuracy (correct / total).
 

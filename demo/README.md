@@ -1,75 +1,84 @@
 # Agent Demo — a real agent using only the hosted SKILL.md
 
-This folder is the **video demo**. It shows a real coding agent (Cursor **or**
-Claude Code) reading `SKILL.md` and, from a single instruction, autonomously
-analyzing a folder of **random emails** through the live hosted API — then printing
-a graded scoreboard. No Anthropic API key needed: the agent uses Cursor's / Claude
-Code's own model.
+This folder is the **video demo**. **One command** launches a real Claude Code
+agent that, on its own, reads `SKILL.md`, analyzes a folder of **random emails**
+through the live hosted API, and prints a graded scoreboard. No prompt typed, no
+Anthropic API key — it uses your Claude subscription login.
 
 **Why this satisfies the hackathon:** the scored bar is "a stock agent succeeds
-using only your SKILL.md." Here the agent is opened in a folder that contains
-**only** the `SKILL.md`, the random `inbox/` emails, and `labels.json` — no repo,
-no model, no code. It has nothing to fall back on, so every verdict must come from
-your live API, driven purely by the instructions in `SKILL.md`.
+using only your SKILL.md." The agent runs inside this folder, which contains
+**only** `SKILL.md`, the random `inbox/` emails, and `labels.json` — no repo, no
+model, no code. It has nothing to fall back on, so every verdict must come from
+your live API, driven purely by `SKILL.md`.
 
-## Files
-- `SKILL.md` — the hosted skill the agent reads (copy of the deployed one; refresh
-  if the Render URL ever changes).
-- `make_inbox.py` — generates a fresh random inbox (`inbox/email_0X.txt`) + ground
-  truth (`labels.json`). Reuses the project's `inbox_sim/generator.py`.
-- `PROMPT.txt` — the single instruction you paste into the agent.
-- `grade.py` — optional fallback scoreboard (only if you don't want the agent to
-  self-grade on camera).
-- `inbox/`, `labels.json` — generated each run; git-ignored.
+## Prerequisites (one-time)
+- Claude Code installed and logged in: `claude login` (Pro/Max subscription).
+- `ANTHROPIC_API_KEY` **unset**, so the agent uses your subscription (not a key):
+  - PowerShell: `$env:ANTHROPIC_API_KEY = ''`
+- Python on PATH (only to generate the random emails).
 
-## Setup (once, right before recording)
+## Run it (the whole demo)
 From the repo root (`...\Autonomus Agent Version\project\TIS`):
 
-```
-python demo/make_inbox.py 6            # 6 fresh random emails
-# or, for a repeatable take:
-python demo/make_inbox.py 6 --seed 1
+```powershell
+.\demo\run_demo.ps1              # 6 fresh random emails
+.\demo\run_demo.ps1 -N 8         # more emails
+.\demo\run_demo.ps1 -N 6 -Seed 1 # reproducible take
 ```
 
-Warm the free-tier service so the first call in the video is fast:
-```
-curl https://phishing-analyzer-api-wq1v.onrender.com/health
-```
-(Wait for `{"status":"ok"}` — the first hit after idle can take 30–60s.)
+(Git-Bash / macOS / Linux: `./demo/run_demo.sh 6` — optional second arg is the seed.)
 
-## Record — Option A: Claude Code
-1. `cd demo`
-2. Start Claude Code in this folder.
-3. Paste the contents of `PROMPT.txt` and send.
-4. Record: it reads `SKILL.md`, calls `/health`, then `/analyze` once per email
-   against the live URL, and prints the verdict table + accuracy.
+The launcher does three things automatically:
+1. generates a fresh random inbox (`inbox/email_0X.txt` + `labels.json`),
+2. warms the free-tier service (absorbs the 30–60s cold start),
+3. runs the agent headless (`claude -p ... --allowedTools "Read,Glob,Bash(curl *),Bash(python *)" --verbose`).
 
-## Record — Option B: Cursor
-1. Open the `demo/` folder in Cursor (File → Open Folder → this folder).
-2. Open the agent chat (Composer / Agent mode).
-3. Paste the contents of `PROMPT.txt` and send.
-4. Record the same flow — the agent's tool calls (terminal `curl` / HTTP) are
-   visible as it works through the inbox.
-
-Try both; keep whichever looks cleaner on screen.
+You then watch the agent read `SKILL.md`, call the live API once per email, and
+print the verdict table + accuracy — all by itself.
 
 ## Suggested shot list + on-screen captions
-1. **The empty-handed agent.** Show the `demo/` folder contents (just `SKILL.md`,
-   `inbox/`, `labels.json`).
-   > Caption: *"The agent gets ONLY my SKILL.md and a folder of emails — no code, no model."*
-2. **Fresh random inbox.** Run `python demo/make_inbox.py 6` on camera.
-   > Caption: *"Every email is randomly generated — nothing hand-picked."*
-3. **One instruction.** Paste `PROMPT.txt` into the agent.
-   > Caption: *"I give it one instruction. Everything after this is the agent."*
-4. **The agent works.** Show it reading SKILL.md, warming up, and calling the LIVE
-   API once per email.
-   > Caption: *"It reads my SKILL.md and calls my hosted API on its own — fully automatic."*
-5. **Scoreboard.** Show the final verdict table + accuracy.
-   > Caption: *"A stock agent succeeded using only my SKILL.md."*
+1. **The empty-handed agent.** Show this folder — only `SKILL.md`, `inbox/`,
+   `labels.json`, and the small helper scripts.
+   > *"The agent gets ONLY my SKILL.md and a folder of emails — no code, no model."*
+2. **One command.** Run `.\demo\run_demo.ps1`.
+   > *"One command. Everything after this is the agent."*
+3. **Fresh random inbox.** The launcher generates new random emails.
+   > *"Every email is randomly generated — nothing hand-picked."*
+4. **The agent works, unattended.** It reads SKILL.md, warms up, and calls the LIVE
+   API per email (visible via `--verbose`).
+   > *"It reads my SKILL.md and calls my hosted API on its own — no key, no typing."*
+5. **Scoreboard.** Final verdict table + accuracy.
+   > *"A stock agent succeeded using only my SKILL.md."*
 
-## Notes
-- If the agent tries to guess verdicts instead of calling the API, the prompt
-  forbids it ("do NOT decide phishing yourself") — re-run; verify each row has a
-  matching `/analyze` call.
-- Keep `n` small (6) for a tight demo; scale up only if it runs smoothly.
-- The service must be awake and reachable during recording (see Setup).
+## Files
+- `run_demo.ps1` / `run_demo.sh` — the one-command launcher.
+- `SKILL.md` — the hosted skill the agent reads (copy of the deployed one; refresh
+  if the Render URL ever changes).
+- `make_inbox.py` — generates the random inbox + ground truth (reuses
+  `inbox_sim/generator.py`).
+- `PROMPT.txt` — the instruction the launcher feeds the agent.
+- `grade.py` — optional fallback scoreboard.
+- `inbox/`, `labels.json` — generated each run; git-ignored.
+
+## Troubleshooting
+- **Do one rehearsal run before filming.** Run `.\demo\run_demo.ps1` in your normal
+  terminal (NOT inside a Claude Code session — nesting sandboxes the network) and
+  confirm the agent reaches the API and prints the table.
+- **A permission prompt appears / agent aborts on a tool:** the launcher already
+  allowlists `curl`, `curl.exe`, and `python`. If the agent still picks another
+  command and prompts, either approve it once on camera, or (safe here — synthetic
+  folder, public read-only API, no secrets) add `--dangerously-skip-permissions` to
+  the `claude` call in `run_demo.ps1` for a guaranteed no-prompt take. That flag
+  turns off approval gates for the run, so only use it in this throwaway demo folder.
+- **Agent invents a verdict instead of calling the API:** `PROMPT.txt` forbids it;
+  re-run and confirm each row has a matching `/analyze` call.
+- **`--verbose` too noisy on camera:** drop it — the agent still prints its progress
+  and final table.
+- **Cold-start stall:** the launcher warms `/health` first; if the service was
+  asleep, give it a few seconds before it responds.
+
+## Manual fallback (if you'd rather drive it yourself)
+Skip the launcher and run any agent by hand:
+1. Generate the inbox: `python demo/make_inbox.py 6`.
+2. Open the `demo/` folder in Cursor (or `cd demo` + start Claude Code).
+3. Paste the contents of `PROMPT.txt` and send. Same result, but you typed the prompt.
