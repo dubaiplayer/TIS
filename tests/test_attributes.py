@@ -7,6 +7,7 @@ module can be tuned independently without regressions. Run:
 from phishing_analyzer.attributes import (
     urgency, fear_threat, reward, curiosity, authority, financial,
     credential, generic_greeting, sender_domain, links, grammar, caps_tone,
+    sender_auth, link_deception, obfuscation, attachment_risk, ATTRIBUTE_NAMES,
 )
 from phishing_analyzer import pipeline
 
@@ -121,6 +122,53 @@ def test_pipeline_ranks_phish_above_legit():
     assert phish["overall"]["verdict"] in ("phishing", "suspicious")
     assert legit["overall"]["verdict"] == "legitimate"
     # structure sanity
-    assert len(phish["attributes"]) == 12
+    assert len(phish["attributes"]) == len(ATTRIBUTE_NAMES)
     assert all({"name", "score", "label", "explanation", "evidence_spans"} <= a.keys()
                for a in phish["attributes"])
+
+
+# --- real-world detectors (need the email context) ---
+
+def test_sender_auth_fail_and_misalign():
+    bad = {"headers": {"from": "PayPal <svc@paypal-support.com>",
+                       "reply_to": "attacker@evil.ru", "return_path": "<b@evil.ru>",
+                       "authentication_results": "mx; spf=fail; dkim=fail; dmarc=fail",
+                       "received_spf": None, "dkim_signature": None}}
+    assert sender_auth.score("body", context=bad).score > 0.6
+    ok = {"headers": {"from": "Jane <jane@northwind.com>",
+                      "return_path": "<jane@northwind.com>", "reply_to": None,
+                      "authentication_results": "mx; spf=pass; dkim=pass; dmarc=pass",
+                      "received_spf": None, "dkim_signature": "present"}}
+    assert sender_auth.score("body", context=ok).score == 0.0
+
+
+def test_sender_auth_unavailable():
+    r = sender_auth.score("body", context=None)
+    assert r.score == 0.0 and r.label.startswith("unavailable")
+
+
+def test_link_deception_anchor_mismatch():
+    bad = '<a href="http://secure-login.ru/x">sign in to paypal.com</a>'
+    assert link_deception.score("", context={"html": bad}).score > 0.4
+    clean = '<a href="https://www.paypal.com/login">sign in to paypal.com</a>'
+    assert link_deception.score("", context={"html": clean}).score == 0.0
+
+
+def test_link_deception_punycode_in_text():
+    assert link_deception.score("verify at http://xn--pple-43d.com/go", context=None).score > 0.0
+    assert link_deception.score("see https://www.enron.com/investors", context=None).score == 0.0
+
+
+def test_obfuscation_zero_width_and_homoglyph():
+    zwsp, cyr = "​", "а"
+    assert obfuscation.score(f"please ver{zwsp}ify now").score > 0.0
+    assert obfuscation.score(f"conf{cyr}rm your identity").score > 0.0
+    assert obfuscation.score("please verify your account normally").score == 0.0
+
+
+def test_attachment_risk():
+    bad = {"attachments": [{"filename": "invoice.pdf.exe", "content_type": "application/octet-stream"}]}
+    assert attachment_risk.score("body", context=bad).score > 0.5
+    ok = {"attachments": [{"filename": "report.pdf", "content_type": "application/pdf"}]}
+    assert attachment_risk.score("body", context=ok).score == 0.0
+    assert attachment_risk.score("body", context=None).label.startswith("unavailable")

@@ -55,8 +55,8 @@ def _keyword_attributions(detail, text):
     return out
 
 
-def analyze(text, sender=None, use_classifier=True):
-    results = run_all(text, sender=sender)
+def analyze(text, sender=None, use_classifier=True, context=None):
+    results = run_all(text, sender=sender, context=context)
     detail = _classifier_detail(text, use_classifier)
     prob = detail["prob"] if detail else None
     overall = risk.combine(results, prob)
@@ -81,9 +81,46 @@ def analyze(text, sender=None, use_classifier=True):
     }
 
 
+def _extract_context(msg):
+    """Pull the header/HTML/attachment signals the newer attributes need
+    (sender_auth, link_deception, attachment_risk). Best-effort; missing fields
+    are None/empty so attributes degrade to 'unavailable' rather than crash."""
+    def join(vals):
+        return " | ".join(v for v in vals if v) if vals else None
+
+    headers = {
+        "from": msg.get("From"),
+        "return_path": msg.get("Return-Path"),
+        "reply_to": msg.get("Reply-To"),
+        "authentication_results": join(msg.get_all("Authentication-Results")),
+        "received_spf": join(msg.get_all("Received-SPF")),
+        "dkim_signature": "present" if msg.get("DKIM-Signature") else None,
+    }
+    html_parts, attachments = [], []
+    parts = msg.walk() if msg.is_multipart() else [msg]
+    for p in parts:
+        if p.is_multipart():
+            continue
+        ctype = p.get_content_type()
+        fname = p.get_filename()
+        disp = (p.get("Content-Disposition") or "").lower()
+        if fname or "attachment" in disp:
+            attachments.append({"filename": fname or "", "content_type": ctype})
+            continue
+        if ctype == "text/html":
+            payload = p.get_payload(decode=True)
+            if payload:
+                html_parts.append(payload.decode("utf-8", "replace"))
+    return {"headers": headers, "html": "\n".join(html_parts), "attachments": attachments}
+
+
 def analyze_raw(raw_email, use_classifier=True):
-    """Parse a raw RFC822 email: recover sender + subject + body, then analyze."""
-    msg = email.message_from_string(raw_email)
+    """Parse a raw RFC822 email: recover sender + subject + body + context, then analyze."""
+    # Parse as BYTES so 8-bit / no-transfer-encoding bodies keep their real
+    # characters (zero-width, homoglyphs, non-ASCII) instead of being mangled into
+    # literal \uXXXX escapes by the str payload round-trip.
+    msg = (email.message_from_bytes(raw_email) if isinstance(raw_email, bytes)
+           else email.message_from_bytes(raw_email.encode("utf-8", "replace")))
     sender = msg.get("From", "") or None
     subject = msg.get("Subject", "") or ""
     if msg.is_multipart():
@@ -93,5 +130,9 @@ def analyze_raw(raw_email, use_classifier=True):
     else:
         payload = msg.get_payload(decode=True)
         body = payload.decode("utf-8", "replace") if payload else (msg.get_payload() or "")
+    context = _extract_context(msg)
+    # HTML-only email: fall back to the HTML so build_text can extract visible text.
+    if not body and context.get("html"):
+        body = context["html"]
     text = build_text(subject, body)
-    return analyze(text, sender=sender, use_classifier=use_classifier)
+    return analyze(text, sender=sender, use_classifier=use_classifier, context=context)

@@ -12,3 +12,4 @@ pyspellchecker==0.9.0
 beautifulsoup4==4.15.0
 lxml==6.1.1
 PyYAML==6.0.3
+tldextract==5.3.1   # offline registered-domain extraction for link_deception
