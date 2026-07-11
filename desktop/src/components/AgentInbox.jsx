@@ -6,11 +6,12 @@
 // agent + SKILL.md flow is identical either way. Activity streams on the right,
 // verdicts fill in on the left, and any email expands to the full breakdown.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { agentRun, agentStreamUrl, analyzeEmail, ServerDownError } from "../api";
+import { agentRun, agentStreamUrl, analyzeEmail, quarantine, ServerDownError } from "../api";
 import RiskBanner from "./RiskBanner";
 import AttributeBarChart from "./AttributeBarChart";
 import KeywordHighlight from "./KeywordHighlight";
 import AttributeList from "./AttributeList";
+import LinkXray from "./LinkXray";
 
 const VERDICT_COLOR = { phishing: "#ff453a", suspicious: "#ff9f0a", legitimate: "#30d158" };
 const N = 6;
@@ -27,6 +28,8 @@ export default function AgentInbox() {
   const [source, setSource] = useState("synthetic"); // "synthetic" | "gmail"
   const [gEmail, setGEmail] = useState("");
   const [gPass, setGPass] = useState("");
+  const [runId, setRunId] = useState(null);
+  const [guardMsg, setGuardMsg] = useState(null);
   const esRef = useRef(null);
   const doneRef = useRef(false);
   const gotDataRef = useRef(false);
@@ -38,7 +41,7 @@ export default function AgentInbox() {
     stop();
     doneRef.current = false; gotDataRef.current = false;
     setError(null); setBoard(null); setExpanded(null); setReports({});
-    setRows([]); setActivity([]); setStatus("running");
+    setRows([]); setActivity([]); setStatus("running"); setGuardMsg(null); setRunId(null);
     let info;
     try {
       info = await agentRun({ n: N, ...opts });
@@ -55,6 +58,7 @@ export default function AgentInbox() {
       return;
     }
     setRows(info.inbox.map((m) => ({ ...m, pending: true })));
+    setRunId(info.run_id);
 
     const es = new EventSource(agentStreamUrl(info.run_id));
     esRef.current = es;
@@ -104,6 +108,21 @@ export default function AgentInbox() {
 
   const runGmail = () =>
     run({ source: "gmail", email: gEmail.trim(), app_password: gPass.replace(/\s+/g, "") });
+
+  const quarantinePhishing = async () => {
+    const files = rows.filter((r) => r.verdict === "phishing").map((r) => r.file);
+    if (!files.length) { setGuardMsg("No phishing emails to flag."); return; }
+    setGuardMsg("Tagging in Gmail…");
+    try {
+      const res = await quarantine({
+        run_id: runId, files, email: gEmail.trim(), app_password: gPass.replace(/\s+/g, ""),
+      });
+      setGuardMsg(`✓ Flagged ${res.tagged} email(s) in Gmail with the "${res.label}" label `
+                  + "(starred + labeled — reversible, nothing deleted).");
+    } catch (e) {
+      setGuardMsg(`Failed: ${e.message}`);
+    }
+  };
 
   return (
     <div className="sim">
@@ -187,6 +206,19 @@ export default function AgentInbox() {
         </div>
       )}
 
+      {board && source === "gmail" && (
+        <div className="guardian">
+          <button className="analyze-btn" onClick={quarantinePhishing}
+                  disabled={!rows.some((r) => r.verdict === "phishing")}>
+            🛡 Flag phishing in my Gmail
+          </button>
+          <span className="guardian-hint">
+            Stars + labels the flagged emails "Phishing-Suspected" in your inbox — reversible, nothing deleted.
+          </span>
+          {guardMsg && <div className="guardian-msg">{guardMsg}</div>}
+        </div>
+      )}
+
       <div className="agent-grid">
         <div className="inbox">
           {rows.map((r) => (
@@ -218,6 +250,7 @@ export default function AgentInbox() {
               {expanded === r.file && reports[r.file] && (
                 <div className="mail-body">
                   <RiskBanner report={reports[r.file]} />
+                  <LinkXray text={r.raw_email} />
                   <AttributeBarChart attributes={reports[r.file].attributes} />
                   <KeywordHighlight report={reports[r.file]} />
                   <AttributeList attributes={reports[r.file].attributes} />

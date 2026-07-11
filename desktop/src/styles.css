@@ -179,6 +179,31 @@ body {
 .connect-hint { font-size: 11.5px; color: var(--muted); line-height: 1.5; }
 .connect-hint b { color: var(--text); }
 
+/* recommended action (risk banner) */
+.banner-action { display: flex; align-items: baseline; gap: 10px; margin-top: 10px;
+                 padding-top: 10px; border-top: 1px solid rgba(255, 255, 255, 0.12); }
+.action-badge { font-size: 10px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;
+                border: 1px solid; border-radius: 20px; padding: 2px 9px; white-space: nowrap; }
+.action-reco { font-size: 12px; color: var(--text); opacity: 0.92; line-height: 1.45; }
+
+/* link x-ray */
+.xray-loading { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12.5px; }
+.xray-summary { font-size: 12.5px; color: var(--text); margin: 0 0 10px; font-weight: 600; }
+.xray-link { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px;
+             font-family: "SF Mono", ui-monospace, monospace; font-size: 11.5px; background: var(--panel); }
+.xray-link.risky { border-color: rgba(255, 69, 58, 0.42); background: rgba(255, 69, 58, 0.06); }
+.xray-url { color: var(--muted); word-break: break-all; }
+.xray-arrow { color: var(--text); word-break: break-all; margin: 2px 0; }
+.xray-facts { display: flex; flex-wrap: wrap; gap: 12px; color: var(--muted); margin-top: 4px; }
+.xray-facts .warn-txt { color: #ff8a80; font-weight: 600; }
+.xray-reasons { color: #ff8a80; margin-top: 6px; }
+
+/* inbox guardian */
+.guardian { display: flex; flex-direction: column; gap: 8px; background: var(--card); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 14px; box-shadow: var(--shadow); align-items: flex-start; }
+.guardian-hint { font-size: 11.5px; color: var(--muted); }
+.guardian-msg { font-size: 12.5px; color: var(--text); margin-top: 2px; }
+
 .scoreboard {
   background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 16px 18px; display: flex; justify-content: space-between; align-items: center; box-shadow: var(--shadow);

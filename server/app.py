@@ -20,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from phishing_analyzer import pipeline
+from phishing_analyzer import pipeline, link_xray
 from phishing_analyzer.schema import AnalysisReport, build_report
 from inbox_sim.generator import generate_inbox
 from server import sim_agent, agent_runner, mailbox
@@ -52,6 +52,13 @@ def health():
 def analyze(req: AnalyzeRequest) -> AnalysisReport:
     result = pipeline.analyze_raw(req.text, use_classifier=req.use_classifier)
     return build_report(result)
+
+
+@app.post("/xray")
+async def xray(req: AnalyzeRequest):
+    """Link X-ray: follow each link to its true destination + flag domain age /
+    blocklist. Network-heavy; runs off-thread so the loop stays free."""
+    return await asyncio.to_thread(link_xray.xray, req.text)
 
 
 # ---------------------------------------------------------------------------
@@ -269,6 +276,34 @@ async def _agent_events(run_id):
 def agent_stream(run_id: str):
     """SSE: live agent activity + per-email verdicts, then a final scoreboard."""
     return StreamingResponse(_agent_events(run_id), media_type="text/event-stream")
+
+
+class QuarantineRequest(BaseModel):
+    run_id: str
+    files: list = Field(default_factory=list)   # e.g. ["email_01.txt", "email_03.txt"]
+    email: str
+    app_password: str
+    provider: str = "gmail"
+
+
+@app.post("/agent/quarantine")
+def agent_quarantine(req: QuarantineRequest):
+    """Inbox Guardian: star + label the given (phishing) emails back in the real
+    mailbox. Maps the run's files -> IMAP UIDs and applies a reversible tag."""
+    run = _AGENT_RUNS.get(req.run_id)
+    if not run:
+        raise HTTPException(404, "unknown run_id")
+    by_file = {f"email_{it['id']:02d}.txt": it for it in run["inbox"]}
+    uids = [by_file[f]["uid"] for f in req.files
+            if f in by_file and by_file[f].get("uid")]
+    if not uids:
+        raise HTTPException(400, "no matching real-mailbox messages to tag "
+                                 "(only 'My Gmail' runs can be quarantined)")
+    try:
+        n = mailbox.apply_action(req.email, req.app_password, uids, provider=req.provider)
+    except Exception as e:
+        raise HTTPException(400, str(e))
+    return {"tagged": n, "label": "Phishing-Suspected"}
 
 
 def main():

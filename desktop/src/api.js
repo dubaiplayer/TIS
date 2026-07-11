@@ -108,3 +108,37 @@ export async function agentRun({
 export function agentStreamUrl(runId) {
   return `${BASE}/agent/stream/${runId}`;
 }
+
+// ---- Link X-ray (unmask where links really go) ----
+export async function xrayEmail(text) {
+  let res;
+  try {
+    res = await fetch(`${BASE}/xray`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+  } catch {
+    throw new ServerDownError("Can't reach the analyzer server on 127.0.0.1:8008.");
+  }
+  if (!res.ok) throw new Error(`Link X-ray failed (HTTP ${res.status}).`);
+  return res.json();
+}
+
+// ---- Inbox Guardian (tag phishing back in the real mailbox) ----
+export async function quarantine({ run_id, files, email, app_password, provider = "gmail" }) {
+  let res;
+  try {
+    res = await fetch(`${BASE}/agent/quarantine`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ run_id, files, email, app_password, provider }),
+    });
+  } catch {
+    throw new ServerDownError("Can't reach the analyzer server on 127.0.0.1:8008.");
+  }
+  if (!res.ok) {
+    let detail = "";
+    try { detail = (await res.json()).detail || ""; } catch { /* ignore */ }
+    throw new Error(detail || `Quarantine failed (HTTP ${res.status}).`);
+  }
+  return res.json();
+}

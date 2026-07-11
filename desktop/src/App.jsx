@@ -6,6 +6,7 @@ import KeywordHighlight from "./components/KeywordHighlight";
 import AttributeList from "./components/AttributeList";
 import InboxSimulator from "./components/InboxSimulator";
 import AgentInbox from "./components/AgentInbox";
+import LinkXray from "./components/LinkXray";
 
 const AUTO_DELAY = 800; // ms after typing/paste stops
 
@@ -115,6 +116,7 @@ export default function App() {
           {report && !loading && (
             <section className="results">
               <RiskBanner report={report} />
+              <LinkXray text={text} />
               <AttributeBarChart attributes={report.attributes} />
               <KeywordHighlight report={report} />
               <AttributeList attributes={report.attributes} />

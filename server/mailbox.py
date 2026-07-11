@@ -44,23 +44,57 @@ def fetch_recent(address, app_password, n=10, provider="gmail"):
                 f"account password. ({e})") from e
 
         M.select("INBOX")
-        typ, data = M.search(None, "ALL")
-        ids = data[0].split()
-        recent = ids[-max(1, n):][::-1]  # newest first
+        typ, data = M.uid("search", None, "ALL")
+        uids = data[0].split()
+        recent = uids[-max(1, n):][::-1]  # newest first
         out = []
-        for i, num in enumerate(recent, 1):
-            typ, msg_data = M.fetch(num, "(RFC822)")
+        for i, uid in enumerate(recent, 1):
+            typ, msg_data = M.uid("fetch", uid, "(RFC822)")
             if not msg_data or not msg_data[0]:
                 continue
             raw_bytes = msg_data[0][1]
             msg = email.message_from_bytes(raw_bytes)
             out.append({
                 "id": i,
+                "uid": uid.decode() if isinstance(uid, bytes) else str(uid),
                 "raw_email": raw_bytes.decode("utf-8", "replace"),
                 "from": _decode(msg.get("From", "")) or "(unknown sender)",
                 "subject": _decode(msg.get("Subject", "")) or "(no subject)",
             })
         return out
+    finally:
+        try:
+            M.logout()
+        except Exception:
+            pass
+
+
+def apply_action(address, app_password, uids, provider="gmail", label="Phishing-Suspected"):
+    """Inbox Guardian action: STAR the given INBOX message UIDs and (Gmail) add a
+    reversible '<label>' label. Non-destructive - nothing is deleted or moved, so
+    a false positive is trivially undone in Gmail. Returns how many were tagged."""
+    if not uids:
+        return 0
+    host, port = IMAP_HOSTS.get(provider, IMAP_HOSTS["gmail"])
+    M = imaplib.IMAP4_SSL(host, port, timeout=20)
+    try:
+        try:
+            M.login(address, app_password)
+        except imaplib.IMAP4.error as e:
+            raise RuntimeError(f"IMAP login failed: {e}") from e
+        M.select("INBOX")
+        uidset = ",".join(str(u) for u in uids)
+        M.uid("STORE", uidset, "+FLAGS", "(\\Flagged)")   # star (universally visible)
+        if provider == "gmail":
+            try:
+                M.create(label)   # Gmail: a folder == a label; ignore if it exists
+            except Exception:
+                pass
+            try:
+                M.uid("COPY", uidset, label)   # copy-to-label applies the label
+            except Exception:
+                pass
+        return len(uids)
     finally:
         try:
             M.logout()

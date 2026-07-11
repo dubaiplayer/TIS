@@ -18,6 +18,14 @@ export default function RiskBanner({ report }) {
         <div className="meter-fill" style={{ width: `${pct}%`, background: s.border }} />
       </div>
       <p className="banner-summary">{report.summary}</p>
+      {report.action && (
+        <div className="banner-action">
+          <span className="action-badge" style={{ color: s.fg, borderColor: s.border }}>
+            {report.action}
+          </span>
+          {report.recommendation && <span className="action-reco">{report.recommendation}</span>}
+        </div>
+      )}
     </div>
   );
 }
