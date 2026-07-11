@@ -101,8 +101,12 @@ def adjust(report, raw: str, from_addr: str):
     if report.verdict != "phishing":
         return report
 
-    if _attr(report, "attachment_risk") >= 0.5:
-        return report  # a genuinely dangerous attachment - keep flagged
+    # Hard signals that survive inbox trust: a dangerous attachment, or a
+    # credential-harvest link hosted on trusted SaaS. The latter's whole cover is an
+    # authenticated, trusted-brand sender (e.g. a compromised gmail.com account), so
+    # it must NOT be cleared by the brand/DMARC checks below.
+    if _attr(report, "attachment_risk") >= 0.5 or _attr(report, "saas_abuse") >= 0.5:
+        return report
 
     dom = _reg_domain(from_addr)
     if dom in _TRUSTED:

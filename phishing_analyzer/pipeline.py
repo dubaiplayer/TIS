@@ -11,7 +11,7 @@ import email
 import re
 
 from .attributes import run_all
-from . import risk
+from . import risk, trust
 from .text_clean import build_text
 
 _clf = None
@@ -68,6 +68,20 @@ def analyze(text, sender=None, use_classifier=True, context=None):
     if not sender:
         notes.append("no sender header; sender_domain spoof check skipped")
 
+    # Sender-trust discount: if headers prove the mail is genuinely from its sender
+    # (auth pass) and it is self-consistent, LOWER the risk so real bank/transactional
+    # mail isn't flagged on shared wording. No-op without headers, so the original
+    # rule/ML balance is untouched for body-only text.
+    tr = trust.assess(text, sender, context, results, risk.load_weights())
+    if tr and overall["risk_score"] > tr["cap"]:
+        overall["risk_score"] = round(tr["cap"], 4)
+        overall["verdict"] = risk.verdict_for(tr["cap"])
+        overall["trust_adjusted"] = tr["tier"]
+        if overall["verdict"] == "legitimate":
+            overall["top_signals"] = []
+        notes.append("sender-trust discount (" + tr["tier"] + "): "
+                     + "; ".join(tr["reasons"]))
+
     classifier = {"phishing_probability": prob, "keyword_attributions": []}
     if detail:
         classifier["keyword_attributions"] = _keyword_attributions(detail, text)
@@ -96,6 +110,7 @@ def _extract_context(msg):
         "authentication_results": join(msg.get_all("Authentication-Results")),
         "received_spf": join(msg.get_all("Received-SPF")),
         "dkim_signature": "present" if msg.get("DKIM-Signature") else None,
+        "list_unsubscribe": msg.get("List-Unsubscribe"),
     }
     html_parts, attachments = [], []
     parts = msg.walk() if msg.is_multipart() else [msg]

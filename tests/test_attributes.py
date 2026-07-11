@@ -7,6 +7,7 @@ module can be tuned independently without regressions. Run:
 from phishing_analyzer.attributes import (
     urgency, fear_threat, reward, curiosity, authority, financial,
     credential, generic_greeting, sender_domain, links, grammar, caps_tone,
+    ATTRIBUTE_NAMES,
 )
 from phishing_analyzer import pipeline
 
@@ -121,6 +122,6 @@ def test_pipeline_ranks_phish_above_legit():
     assert phish["overall"]["verdict"] in ("phishing", "suspicious")
     assert legit["overall"]["verdict"] == "legitimate"
     # structure sanity
-    assert len(phish["attributes"]) == 18
+    assert len(phish["attributes"]) == len(ATTRIBUTE_NAMES)
     assert all({"name", "score", "label", "explanation", "evidence_spans"} <= a.keys()
                for a in phish["attributes"])
