@@ -9,6 +9,9 @@ import AgentInbox from "./components/AgentInbox";
 import LinkXray from "./components/LinkXray";
 
 const AUTO_DELAY = 800; // ms after typing/paste stops
+// Hosted web build: the Live Agent spawns the local `claude` CLI, which a server
+// can't do, so that tab is hidden online. Set VITE_HOSTED=1 for the deployed build.
+const HOSTED = import.meta.env.VITE_HOSTED === "1";
 
 export default function App() {
   const [text, setText] = useState("");
@@ -66,8 +69,10 @@ export default function App() {
         <div className="tabs">
           <button className={view === "analyze" ? "seg on" : "seg"}
                   onClick={() => setView("analyze")}>Analyze</button>
-          <button className={view === "agent" ? "seg on" : "seg"}
-                  onClick={() => setView("agent")}>Live Agent</button>
+          {!HOSTED && (
+            <button className={view === "agent" ? "seg on" : "seg"}
+                    onClick={() => setView("agent")}>Live Agent</button>
+          )}
           <button className={view === "inbox" ? "seg on" : "seg"}
                   onClick={() => setView("inbox")}>Inbox Sim</button>
         </div>
@@ -89,7 +94,7 @@ export default function App() {
         </div>
       )}
 
-      {view === "agent" ? (
+      {view === "agent" && !HOSTED ? (
         <AgentInbox />
       ) : view === "inbox" ? (
         <InboxSimulator />

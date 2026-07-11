@@ -1,0 +1,10 @@
+**/node_modules
+**/.venv
+.venv
+**/__pycache__
+**/*.pyc
+desktop/dist
+.git
+.pytest_cache
+data
+server/google_oauth.json

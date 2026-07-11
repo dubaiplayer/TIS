@@ -470,9 +470,19 @@ def agent_quarantine(req: QuarantineRequest):
     return {"tagged": n, "label": "Phishing-Suspected"}
 
 
+# Serve the built web UI (single-service production deploy) if it's present.
+# Mounted LAST so all API routes above take precedence; no-op in local dev where
+# the Vite dev server serves the UI on :5173 and there is no build.
+_UI_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "desktop", "dist")
+if os.path.isdir(_UI_DIR):
+    from fastapi.staticfiles import StaticFiles
+    app.mount("/", StaticFiles(directory=_UI_DIR, html=True), name="ui")
+
+
 def main():
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8008)
+    port = int(os.environ.get("PORT", "8008"))
+    uvicorn.run(app, host="0.0.0.0", port=port)
 
 
 if __name__ == "__main__":

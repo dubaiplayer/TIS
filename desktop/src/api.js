@@ -1,7 +1,10 @@
 // Client for the local FastAPI backend. Distinguishes "server unreachable"
 // (connection refused -> the Python server isn't running) from HTTP errors, so
 // the UI can show a clear, actionable message instead of failing silently.
-export const BASE = "http://127.0.0.1:8008";
+// Same-origin in a hosted (production) build; the local backend in dev. Override
+// with VITE_API_BASE at build time if the API lives on a different host.
+export const BASE = import.meta.env.VITE_API_BASE
+  ?? (import.meta.env.PROD ? "" : "http://127.0.0.1:8008");
 
 export class ServerDownError extends Error {}
 

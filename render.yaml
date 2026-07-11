@@ -1,0 +1,10 @@
+# Render Blueprint - one-click deploy of the whole product (web UI + analyzer API)
+# as a single Docker web service.
+# In Render: New -> Blueprint -> connect this repo/branch -> it reads this file -> Deploy.
+services:
+  - type: web
+    name: phishing-analyzer-web
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
