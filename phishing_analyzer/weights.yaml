@@ -56,3 +56,10 @@ verdict_thresholds:
 # Attributes excluded from the vote when uncomputable (e.g. sender_domain with no
 # sender header) so absence of evidence isn't treated as evidence of safety.
 skip_when_unavailable: [sender_domain, sender_auth, attachment_risk, html_attack]
+
+# Detectors that are REPORTED in the output (attributes[]) for explainability but do
+# NOT contribute to the risk score / verdict. This keeps the risk combination exactly
+# as it was originally: the 12 language/heuristic attributes + the TF-IDF/LogReg
+# classifier at their original balance. The real-world detectors surface as evidence
+# without changing the score.
+report_only: [sender_auth, link_deception, obfuscation, attachment_risk, bec, html_attack]

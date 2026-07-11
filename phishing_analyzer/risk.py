@@ -40,7 +40,11 @@ def combine(attribute_results, classifier_prob=None, cfg=None):
     ceiling = float(cfg.get("attribute_reliability_ceiling", 0.9))
     clf_reliability = float(cfg.get("classifier_reliability", 0.97))
     vote_floor = float(cfg.get("vote_floor", 0.0))
-    max_w = max(aw.values()) if aw else 1.0
+    report_only = set(cfg.get("report_only", []))
+    # Normalize reliabilities over the SCORING attributes only, so report-only
+    # detectors never shift the original rule/ML balance.
+    scoring_w = {k: v for k, v in aw.items() if k not in report_only}
+    max_w = max(scoring_w.values()) if scoring_w else 1.0
 
     log_survival = 0.0          # accumulate log(1 - vote) for numerical stability
     contributions = []
@@ -62,10 +66,10 @@ def combine(attribute_results, classifier_prob=None, cfg=None):
     for r in attribute_results:
         w = aw.get(r.name, 1.0)
         reliability = (w / max_w) * ceiling
-        if r.name in skip and r.label.startswith("unavailable"):
-            cast(r.name, r.score, reliability, included=False)
-        else:
-            cast(r.name, r.score, reliability)
+        # report_only detectors are reported in the output but excluded from the
+        # risk score / verdict (keeps the original rule + ML balance intact).
+        excluded = r.name in report_only or (r.name in skip and r.label.startswith("unavailable"))
+        cast(r.name, r.score, reliability, included=not excluded)
 
     if classifier_prob is not None:
         cast("content_classifier", classifier_prob, clf_reliability, floor=False)
