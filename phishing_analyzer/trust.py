@@ -45,8 +45,11 @@ _DMARC = re.compile(r"\bdmarc=(\w+)", re.IGNORECASE)
 _SPF = re.compile(r"\bspf=(\w+)", re.IGNORECASE)
 _DKIM = re.compile(r"\bdkim=(\w+)", re.IGNORECASE)
 
-# Structural attack signals that override any trust from authentication.
-_ATTACK = ("link_deception", "obfuscation", "attachment_risk", "html_attack")
+# Structural attack signals that override any trust from authentication - including
+# saas_abuse, so an authenticated sender carrying a credential-harvest link hosted on
+# trusted SaaS (Google Forms / DocuSign / *.web.app) is no longer cleared.
+_ATTACK = ("link_deception", "obfuscation", "attachment_risk", "html_attack",
+           "saas_abuse")
 
 # Known brands/banks whose authenticated mail should read as legitimate even with
 # alarming wording. Registered domains. Extend freely - it only ever helps.
