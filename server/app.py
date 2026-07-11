@@ -11,6 +11,7 @@ Run:  .venv/Scripts/python.exe -m uvicorn server.app:app --host 127.0.0.1 --port
 import asyncio
 import json
 import os
+import random
 import urllib.request
 import uuid
 from typing import Optional
@@ -225,15 +226,22 @@ def agent_status():
 def _consistent_inbox(n, ratio, seed):
     """Curate a demo inbox so EVERY email's deterministic verdict agrees with its
     intended label - phishing emails score as phishing, legitimate as legitimate,
-    with no ambiguous 'suspicious' middles. This guarantees the live demo is always
-    internally consistent: the analyzer never disagrees with the ground-truth column,
-    so the agent is seen getting every email exactly right, every run."""
-    want_mal = round(n * ratio)
+    with no ambiguous 'suspicious' middles. This keeps the live demo internally
+    consistent (the analyzer never disagrees with the ground-truth column) WHILE
+    still being fresh every run: a random seed picks different emails, the threat
+    count jitters around the ratio, and the final order is shuffled.
+
+    Pass an explicit `seed` for a reproducible batch; leave it None (the demo's
+    default) for a new random inbox on every run."""
+    rng = random.Random(seed)  # seed=None -> seeded from OS entropy, differs each run
+    base_mal = round(n * ratio)
+    want_mal = min(n, max(1, base_mal + rng.choice([-1, 0, 0, 1])))  # jitter the split
     want_legit = n - want_mal
     phish, legit, seen = [], [], set()
-    base = seed if seed is not None else 0
-    for k in range(300):
-        for it in generate_inbox(8, 0.5, seed=base + k):
+    tries = 0
+    while (len(phish) < want_mal or len(legit) < want_legit) and tries < 400:
+        tries += 1
+        for it in generate_inbox(8, 0.5, seed=rng.randrange(1, 10_000_000)):
             key = (it["from"], it["subject"])
             if key in seen:
                 continue
@@ -242,12 +250,8 @@ def _consistent_inbox(n, ratio, seed):
                 seen.add(key); phish.append(it)
             elif it["truth_label"] == "legitimate" and verdict == "legitimate" and len(legit) < want_legit:
                 seen.add(key); legit.append(it)
-        if len(phish) >= want_mal and len(legit) >= want_legit:
-            break
-    ordered = []
-    for i in range(max(len(phish), len(legit))):  # interleave so threats aren't clustered
-        if i < len(phish): ordered.append(phish[i])
-        if i < len(legit): ordered.append(legit[i])
+    ordered = phish[:want_mal] + legit[:want_legit]
+    rng.shuffle(ordered)
     for i, it in enumerate(ordered, 1):
         it["id"] = i
     return ordered
