@@ -33,6 +33,16 @@ def load_weights(path=_WEIGHTS_PATH):
     return _cfg
 
 
+def verdict_for(risk_score, cfg=None):
+    """Map a 0..1 risk score to a verdict using the configured bands."""
+    t = (cfg or load_weights())["verdict_thresholds"]
+    if risk_score >= t["phishing_at_or_above"]:
+        return "phishing"
+    if risk_score < t["legitimate_below"]:
+        return "legitimate"
+    return "suspicious"
+
+
 def combine(attribute_results, classifier_prob=None, cfg=None):
     cfg = cfg or load_weights()
     aw = cfg["attribute_weights"]

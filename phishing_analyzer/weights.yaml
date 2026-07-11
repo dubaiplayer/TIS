@@ -53,6 +53,16 @@ verdict_thresholds:
   legitimate_below: 0.35        # < 0.35            -> "legitimate"
   phishing_at_or_above: 0.60    # >= 0.60           -> "phishing"; between -> "suspicious"
 
+# Sender-trust discount (phishing_analyzer/trust.py): cut false positives on GENUINE
+# bank / transactional mail whose wording overlaps with phishing. Only LOWERS risk,
+# and only when the headers prove the message is authenticated (SPF/DKIM/DMARC pass)
+# AND self-consistent (no link/attachment/obfuscation trickery). No headers -> no
+# change, so body-only text keeps the original rule/ML balance.
+sender_trust:
+  enabled: true
+  legitimate_cap: 0.2   # authenticated + consistent + (known brand OR List-Unsubscribe)
+  suspicious_cap: 0.5   # authenticated + consistent, but an unknown sender domain
+
 # Attributes excluded from the vote when uncomputable (e.g. sender_domain with no
 # sender header) so absence of evidence isn't treated as evidence of safety.
 skip_when_unavailable: [sender_domain, sender_auth, attachment_risk, html_attack]
