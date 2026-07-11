@@ -56,3 +56,7 @@ verdict_thresholds:
 # Attributes excluded from the vote when uncomputable (e.g. sender_domain with no
 # sender header) so absence of evidence isn't treated as evidence of safety.
 skip_when_unavailable: [sender_domain, sender_auth, attachment_risk, html_attack]
+
+# Detectors REPORTED for explainability but excluded from the risk score / verdict,
+# so the original 12-rule + TF-IDF/LogReg balance is unchanged.
+report_only: [sender_auth, link_deception, obfuscation, attachment_risk, bec, html_attack]
