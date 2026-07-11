@@ -34,10 +34,11 @@ _TRUSTED = {
     "americanexpress.com", "capitalone.com", "discover.com", "usbank.com",
 }
 
-# Structural attack signals that survive authentication - if any of these fire the
-# message stays flagged even from an authenticated / trusted-looking sender.
-_STRUCTURAL = {"link_deception", "sender_domain", "attachment_risk",
-               "html_attack", "obfuscation"}
+# Unambiguously malicious mechanics that never appear in legitimate mail - if either
+# fires the message stays phishing no matter what authentication says. (Link/HTML
+# checks are deliberately NOT here: legit marketing mail routinely uses redirect
+# links and tracking beacons, which trip them and caused the false positives.)
+_HARD_MALICIOUS = {"obfuscation", "attachment_risk"}
 
 _ACTION = {"legitimate": "allow", "suspicious": "warn"}
 
@@ -63,8 +64,8 @@ def _auth_results(raw: str) -> dict:
             "dkim": status("dkim"), "dmarc": status("dmarc")}
 
 
-def _has_structural_attack(report) -> bool:
-    return any(a.name in _STRUCTURAL and a.score >= 0.5 for a in report.attributes)
+def _hard_malicious(report) -> bool:
+    return any(a.name in _HARD_MALICIOUS and a.score >= 0.5 for a in report.attributes)
 
 
 def _downgrade(report, verdict: str, why: str):
@@ -83,25 +84,40 @@ def _downgrade(report, verdict: str, why: str):
 
 def adjust(report, raw: str, from_addr: str):
     """Return a possibly-downgraded copy of a report for a REAL inbox message.
-    No-op unless the analyzer called it phishing; never escalates."""
+
+    A real inbox is mostly legitimate mail, and the analyzer (trained on a phishing
+    corpus) over-fires on the alarming-but-normal wording of security alerts,
+    receipts, and marketing. So in the inbox we call something phishing ONLY on
+    concrete evidence, not wording:
+      * unambiguously malicious mechanics (hidden/homoglyph text, dangerous
+        attachment) -> always phishing;
+      * the sender failed authentication (DMARC/SPF fail) -> spoof, phishing;
+      * otherwise, if the message is authenticated (DMARC pass) it genuinely came
+        from its sender -> legitimate;
+      * with no authentication signal at all, downgrade to suspicious rather than
+        screaming phishing on wording alone.
+    Only ever REDUCES a phishing call; never escalates."""
     if report.verdict != "phishing":
         return report
-    if _has_structural_attack(report):
-        return report  # a genuine lookalike/mismatch/attachment - keep it flagged
+    if _hard_malicious(report):
+        return report  # hidden-char / homoglyph / dangerous attachment - keep flagged
 
     auth = _auth_results(raw)
-    dmarc_ok = auth["dmarc"] == "pass"
-    authenticated = dmarc_ok or (auth["dkim"] == "pass" and auth["spf"] == "pass")
-    if not authenticated:
-        return report  # unauthenticated + scary wording => leave it flagged
+    if auth["dmarc"] == "fail" or auth["spf"] == "fail":
+        return report  # sender failed authentication => likely spoof, keep flagged
 
     dom = _reg_domain(from_addr)
-    if dmarc_ok and dom in _TRUSTED:
-        return _downgrade(
-            report, "legitimate",
-            f"Authenticated mail genuinely from {dom} (DMARC pass). Security-alert "
-            "wording is normal from this sender - not phishing.")
+    if auth["dmarc"] == "pass":
+        if dom in _TRUSTED:
+            why = (f"Authenticated mail genuinely from {dom} (DMARC pass). "
+                   "Security-alert wording is normal from this sender - not phishing.")
+        else:
+            why = (f"Authenticated as genuinely from {dom} (DMARC pass) with no "
+                   "malicious attachment or hidden-text tricks. Flagged on wording "
+                   "only - not phishing.")
+        return _downgrade(report, "legitimate", why)
+
     return _downgrade(
         report, "suspicious",
-        f"Sender {dom} passed authentication and showed no link/domain deception; "
-        "treat with normal caution rather than as confirmed phishing.")
+        f"No failed authentication, dangerous attachment, or hidden-text tricks "
+        f"from {dom or 'this sender'}; flagged on wording only - treat as caution.")
