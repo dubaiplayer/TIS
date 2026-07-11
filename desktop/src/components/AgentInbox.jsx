@@ -6,7 +6,8 @@
 // agent + SKILL.md flow is identical either way. Activity streams on the right,
 // verdicts fill in on the left, and any email expands to the full breakdown.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { agentRun, agentReport, agentStreamUrl, analyzeEmail, analyzeInboxEmail, quarantine, ServerDownError } from "../api";
+import { agentRun, agentReport, agentStreamUrl, analyzeEmail, analyzeInboxEmail,
+  quarantine, startGoogleAuth, googleStatus, ServerDownError } from "../api";
 import RiskBanner from "./RiskBanner";
 import AttributeBarChart from "./AttributeBarChart";
 import KeywordHighlight from "./KeywordHighlight";
@@ -25,11 +26,13 @@ export default function AgentInbox() {
   const [error, setError] = useState(null);
   const [expanded, setExpanded] = useState(null);
   const [reports, setReports] = useState({});
-  const [source, setSource] = useState("synthetic"); // "synthetic" | "gmail"
-  const [gEmail, setGEmail] = useState("");
-  const [gPass, setGPass] = useState("");
+  const [source, setSource] = useState("synthetic"); // "synthetic" | "gmail_oauth"
+  const [gEmail, setGEmail] = useState("");          // connected Google account
+  const [gState, setGState] = useState(null);        // OAuth session id
+  const [gConnecting, setGConnecting] = useState(false);
   const [runId, setRunId] = useState(null);
   const [guardMsg, setGuardMsg] = useState(null);
+  const pollRef = useRef(null);
   const esRef = useRef(null);
   const doneRef = useRef(false);
   const gotDataRef = useRef(false);
@@ -108,7 +111,7 @@ export default function AgentInbox() {
           try { rep = await agentReport(runId, r.file); } catch { rep = null; }
         }
         if (!rep) {
-          rep = source === "gmail"
+          rep = source === "gmail_oauth"
             ? await analyzeInboxEmail(r.raw_email, r.from)
             : await analyzeEmail(r.raw_email);
         }
@@ -117,17 +120,34 @@ export default function AgentInbox() {
     }
   };
 
-  const runGmail = () =>
-    run({ source: "gmail", email: gEmail.trim(), app_password: gPass.replace(/\s+/g, "") });
+  const signInGoogle = async () => {
+    setError(null); setGConnecting(true); setGEmail("");
+    if (pollRef.current) clearInterval(pollRef.current);
+    try {
+      const { auth_url, state } = await startGoogleAuth();
+      setGState(state);
+      window.open(auth_url, "_blank", "noopener,noreferrer"); // consent in the browser
+      pollRef.current = setInterval(async () => {
+        const st = await googleStatus(state);
+        if (st.connected) {
+          clearInterval(pollRef.current); pollRef.current = null;
+          setGEmail(st.email); setGConnecting(false);
+        }
+      }, 1500);
+    } catch (e) {
+      setGConnecting(false);
+      setError(e.message);
+    }
+  };
+
+  const runGmail = () => run({ source: "gmail_oauth", state: gState });
 
   const quarantinePhishing = async () => {
     const files = rows.filter((r) => r.verdict === "phishing").map((r) => r.file);
     if (!files.length) { setGuardMsg("No phishing emails to flag."); return; }
     setGuardMsg("Tagging in Gmail…");
     try {
-      const res = await quarantine({
-        run_id: runId, files, email: gEmail.trim(), app_password: gPass.replace(/\s+/g, ""),
-      });
+      const res = await quarantine({ run_id: runId, files });
       setGuardMsg(`✓ Flagged ${res.tagged} email(s) in Gmail with the "${res.label}" label `
                   + "(starred + labeled — reversible, nothing deleted).");
     } catch (e) {
@@ -148,8 +168,8 @@ export default function AgentInbox() {
           <div className="tabs">
             <button className={source === "synthetic" ? "seg on" : "seg"}
                     onClick={() => { setSource("synthetic"); run(); }}>Demo inbox</button>
-            <button className={source === "gmail" ? "seg on" : "seg"}
-                    onClick={() => setSource("gmail")}>My Gmail</button>
+            <button className={source === "gmail_oauth" ? "seg on" : "seg"}
+                    onClick={() => setSource("gmail_oauth")}>My Gmail</button>
           </div>
           {source === "synthetic" && (
             <button className="analyze-btn" onClick={() => run()} disabled={status === "running"}>
@@ -159,30 +179,38 @@ export default function AgentInbox() {
         </div>
       </div>
 
-      {source === "gmail" && (
+      {source === "gmail_oauth" && (
         <div className="connect">
           <div className="connect-row">
-            <input className="connect-input" type="email" placeholder="you@gmail.com"
-                   value={gEmail} onChange={(e) => setGEmail(e.target.value)} autoComplete="username" />
-            <input className="connect-input" type="password" placeholder="16-char app password"
-                   value={gPass} onChange={(e) => setGPass(e.target.value)} autoComplete="current-password" />
-            <button className="analyze-btn" onClick={runGmail}
-                    disabled={status === "running" || !gEmail || !gPass}>
-              {status === "running" ? "Analyzing…" : "Analyze my inbox"}
-            </button>
+            {!gEmail ? (
+              <button className="gsignin" onClick={signInGoogle} disabled={gConnecting}>
+                <span className="gmark">G</span>
+                {gConnecting ? "Waiting for Google…" : "Sign in with Google"}
+              </button>
+            ) : (
+              <>
+                <span className="connected-as">Connected as <b>{gEmail}</b></span>
+                <button className="analyze-btn" onClick={runGmail} disabled={status === "running"}>
+                  {status === "running" ? "Analyzing…" : "Analyze my inbox"}
+                </button>
+                <button className="seg" onClick={signInGoogle}>Switch account</button>
+              </>
+            )}
           </div>
           <div className="connect-hint">
-            Uses a Gmail <b>app password</b> (turn on 2-step verification, then create one at
-            myaccount.google.com/apppasswords) — not your normal password. It's sent only to your
-            local backend for one IMAP fetch and is never stored.
+            {gConnecting
+              ? <>A Google sign-in tab opened in your browser — approve access, then come back here.</>
+              : <>Secure <b>Sign in with Google</b> — no password is ever entered here. The agent reads
+                 your most recent emails to triage them; the connection stays in this local app only
+                 and nothing is deleted.</>}
           </div>
         </div>
       )}
 
       <div className="hosted-note">
-        {source === "gmail"
-          ? <>A real agent reads your <b>actual inbox</b> over IMAP and analyzes each email with the
-             same SKILL.md. Its steps stream on the right; click any email for the full breakdown.</>
+        {source === "gmail_oauth"
+          ? <>A real agent reads your <b>actual inbox</b> via the Gmail API and analyzes each email
+             with the same SKILL.md. Its steps stream on the right; click any email for the breakdown.</>
           : <>A real headless agent reads a <b>SKILL.md</b> and calls the analyzer itself for every
              randomly generated email — you type nothing. Steps stream on the right.</>}
       </div>
@@ -204,7 +232,7 @@ export default function AgentInbox() {
         </div>
       )}
 
-      {board && source === "gmail" && (
+      {board && source === "gmail_oauth" && (
         <div className="guardian">
           <button className="analyze-btn" onClick={quarantinePhishing}
                   disabled={!rows.some((r) => r.verdict === "phishing")}>

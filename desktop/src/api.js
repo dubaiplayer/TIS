@@ -83,14 +83,14 @@ export async function agentStatus() {
 
 export async function agentRun({
   n = 6, malicious_ratio = 0.5, seed = null,
-  source = "synthetic", email = null, app_password = null,
+  source = "synthetic", email = null, app_password = null, state = null,
 } = {}) {
   let res;
   try {
     res = await fetch(`${BASE}/agent/run`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ n, malicious_ratio, seed, source, email, app_password }),
+      body: JSON.stringify({ n, malicious_ratio, seed, source, email, app_password, state }),
     });
   } catch {
     throw new ServerDownError(
@@ -152,6 +152,32 @@ export async function xrayEmail(text) {
 }
 
 // ---- Inbox Guardian (tag phishing back in the real mailbox) ----
+// ---- Sign in with Google (OAuth) ----
+export async function googleConfigured() {
+  try {
+    const res = await fetch(`${BASE}/auth/google/config`);
+    return res.ok ? (await res.json()).configured : false;
+  } catch { return false; }
+}
+
+export async function startGoogleAuth() {
+  let res;
+  try { res = await fetch(`${BASE}/auth/google/start`, { method: "POST" }); }
+  catch { throw new ServerDownError("Can't reach the analyzer server on 127.0.0.1:8008."); }
+  if (!res.ok) {
+    let detail = "";
+    try { detail = (await res.json()).detail || ""; } catch { /* ignore */ }
+    throw new Error(detail || `Sign-in start failed (HTTP ${res.status}).`);
+  }
+  return res.json(); // { auth_url, state }
+}
+
+export async function googleStatus(state) {
+  const res = await fetch(`${BASE}/auth/google/status?state=${encodeURIComponent(state)}`);
+  if (!res.ok) return { connected: false };
+  return res.json(); // { connected, email }
+}
+
 export async function quarantine({ run_id, files, email, app_password, provider = "gmail" }) {
   let res;
   try {

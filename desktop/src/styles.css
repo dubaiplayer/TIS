@@ -206,6 +206,18 @@ body {
 
 .score-perfect { color: #30d158; font-weight: 600; }
 
+/* Sign in with Google */
+.gsignin { display: inline-flex; align-items: center; gap: 10px; background: #fff; color: #1f1f1f;
+           border: 1px solid #dadce0; border-radius: 8px; padding: 10px 18px; font-size: 14px;
+           font-weight: 600; cursor: pointer; font-family: inherit; }
+.gsignin:hover { background: #f7f8f8; }
+.gsignin:disabled { opacity: 0.6; cursor: default; }
+.gmark { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px;
+         border-radius: 50%; background: conic-gradient(#ea4335 0 25%, #fbbc05 25% 50%, #34a853 50% 75%, #4285f4 75%);
+         color: #fff; font-weight: 800; font-size: 11px; line-height: 1; }
+.connected-as { font-size: 13px; color: var(--text); }
+.connected-as b { color: var(--text); }
+
 .scoreboard {
   background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 16px 18px; display: flex; justify-content: space-between; align-items: center; box-shadow: var(--shadow);

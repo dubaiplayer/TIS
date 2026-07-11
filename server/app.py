@@ -18,13 +18,13 @@ from typing import Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, HTMLResponse
 from pydantic import BaseModel, Field
 
 from phishing_analyzer import pipeline, link_xray
 from phishing_analyzer.schema import AnalysisReport, build_report
 from inbox_sim.generator import generate_inbox
-from server import sim_agent, agent_runner, mailbox, gmail_triage
+from server import sim_agent, agent_runner, mailbox, gmail_triage, gmail_oauth
 
 app = FastAPI(title="Phishing Analyzer API", version="1.0.0")
 
@@ -68,6 +68,60 @@ def analyze_inbox(req: InboxAnalyzeRequest) -> AnalysisReport:
     paste-in /analyze and the sims are untouched."""
     rep = build_report(pipeline.analyze_raw(req.text))
     return gmail_triage.adjust(rep, req.text, req.from_addr)
+
+
+# ---------------------------------------------------------------------------
+# "Sign in with Google" (OAuth) - password-free Gmail connect for real users
+# ---------------------------------------------------------------------------
+_GOOGLE_SESSIONS = {}   # state -> {connected, email, access_token, refresh_token}
+
+
+@app.get("/auth/google/config")
+def google_config():
+    """Whether a Google OAuth client is configured on this backend."""
+    return {"configured": gmail_oauth.configured()}
+
+
+@app.post("/auth/google/start")
+def google_start():
+    """Begin sign-in: returns Google's consent URL + a state to poll on."""
+    if not gmail_oauth.configured():
+        raise HTTPException(400, "Google OAuth is not configured on this backend "
+                            "(set GOOGLE_CLIENT_ID/SECRET or add server/google_oauth.json).")
+    state = uuid.uuid4().hex
+    _GOOGLE_SESSIONS[state] = {"connected": False}
+    return {"auth_url": gmail_oauth.build_auth_url(state), "state": state}
+
+
+@app.get("/auth/google/callback")
+def google_callback(state: str = "", code: str = "", error: str = ""):
+    """Google redirects here after consent. Swaps the code for tokens and stores
+    them under `state`; the app is polling /auth/google/status meanwhile."""
+    sess = _GOOGLE_SESSIONS.get(state)
+    if error or not code or sess is None:
+        return HTMLResponse(f"<h3>Sign-in failed: {error or 'invalid request'}.</h3>"
+                            "You can close this tab and try again.", status_code=400)
+    try:
+        tok = gmail_oauth.exchange_code(code)
+        access = tok["access_token"]
+        email_addr = gmail_oauth.get_email(access)
+    except Exception as e:
+        return HTMLResponse(f"<h3>Sign-in failed: {e}</h3>You can close this tab.",
+                            status_code=400)
+    _GOOGLE_SESSIONS[state] = {"connected": True, "email": email_addr,
+                               "access_token": access,
+                               "refresh_token": tok.get("refresh_token")}
+    return HTMLResponse(
+        f"<div style='font-family:system-ui;padding:40px;text-align:center'>"
+        f"<h2>Signed in as {email_addr}</h2>"
+        "<p>You can close this tab and return to the Phishing Analyzer app.</p></div>")
+
+
+@app.get("/auth/google/status")
+def google_status(state: str = ""):
+    """The app polls this until `connected` is true, then reads the email."""
+    sess = _GOOGLE_SESSIONS.get(state) or {}
+    return {"connected": bool(sess.get("connected")), "email": sess.get("email", "")}
 
 
 @app.post("/xray")
@@ -212,9 +266,10 @@ class AgentRunRequest(BaseModel):
     n: int = Field(default=8, ge=1, le=30)
     malicious_ratio: float = Field(default=0.5, ge=0.0, le=1.0)
     seed: Optional[int] = None
-    source: str = Field(default="synthetic")   # "synthetic" | "gmail" | "outlook"
+    source: str = Field(default="synthetic")   # synthetic | gmail_oauth | gmail | outlook
     email: Optional[str] = None
     app_password: Optional[str] = None
+    state: Optional[str] = None                 # Google OAuth session (source=gmail_oauth)
 
 
 @app.get("/agent/status")
@@ -262,7 +317,20 @@ def agent_run(req: AgentRunRequest):
     """Build an inbox (synthetic demo OR the user's real mailbox over IMAP), then
     return a run_id + display list (with raw_email so the GUI can fetch the full
     breakdown on expand). The agent + SKILL.md flow is identical either way."""
-    if req.source in ("gmail", "outlook"):
+    oauth_token = None
+    if req.source == "gmail_oauth":
+        sess = _GOOGLE_SESSIONS.get(req.state or "")
+        if not sess or not sess.get("connected"):
+            raise HTTPException(400, "not signed in with Google (connect first)")
+        oauth_token = sess["access_token"]
+        try:
+            inbox = gmail_oauth.fetch_recent(oauth_token, n=req.n)
+        except Exception as e:
+            raise HTTPException(400, f"Gmail fetch failed: {e}")
+        if not inbox:
+            raise HTTPException(400, "no messages found in the inbox")
+        graded = False
+    elif req.source in ("gmail", "outlook"):
         if not req.email or not req.app_password:
             raise HTTPException(400, "email and app_password are required for a mailbox source")
         try:
@@ -276,7 +344,8 @@ def agent_run(req: AgentRunRequest):
         inbox = _consistent_inbox(req.n, req.malicious_ratio, req.seed)
         graded = True
     run_id = uuid.uuid4().hex
-    _AGENT_RUNS[run_id] = {"inbox": inbox, "graded": graded}
+    _AGENT_RUNS[run_id] = {"inbox": inbox, "graded": graded,
+                           "source": req.source, "state": req.state}
     display = [{"id": it["id"], "file": f"email_{it['id']:02d}.txt",
                 "from": it["from"], "subject": it["subject"],
                 "raw_email": it["raw_email"]} for it in inbox]
@@ -355,26 +424,34 @@ def agent_report(run_id: str, file: str):
 class QuarantineRequest(BaseModel):
     run_id: str
     files: list = Field(default_factory=list)   # e.g. ["email_01.txt", "email_03.txt"]
-    email: str
-    app_password: str
+    email: str = ""
+    app_password: str = ""
     provider: str = "gmail"
 
 
 @app.post("/agent/quarantine")
 def agent_quarantine(req: QuarantineRequest):
     """Inbox Guardian: star + label the given (phishing) emails back in the real
-    mailbox. Maps the run's files -> IMAP UIDs and applies a reversible tag."""
+    mailbox. Uses the same connection the run used - Google OAuth or IMAP."""
     run = _AGENT_RUNS.get(req.run_id)
     if not run:
         raise HTTPException(404, "unknown run_id")
     by_file = {f"email_{it['id']:02d}.txt": it for it in run["inbox"]}
-    uids = [by_file[f]["uid"] for f in req.files
-            if f in by_file and by_file[f].get("uid")]
-    if not uids:
+    ids = [by_file[f]["uid"] for f in req.files
+           if f in by_file and by_file[f].get("uid")]
+    if not ids:
         raise HTTPException(400, "no matching real-mailbox messages to tag "
-                                 "(only 'My Gmail' runs can be quarantined)")
+                                 "(only real-inbox runs can be quarantined)")
     try:
-        n = mailbox.apply_action(req.email, req.app_password, uids, provider=req.provider)
+        if run.get("source") == "gmail_oauth":
+            sess = _GOOGLE_SESSIONS.get(run.get("state") or "")
+            if not sess or not sess.get("connected"):
+                raise HTTPException(400, "Google session expired; sign in again")
+            n = gmail_oauth.apply_action(sess["access_token"], ids)
+        else:
+            n = mailbox.apply_action(req.email, req.app_password, ids, provider=req.provider)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(400, str(e))
     return {"tagged": n, "label": "Phishing-Suspected"}
