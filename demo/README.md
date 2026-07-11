@@ -34,7 +34,9 @@ The launcher does three things automatically:
 3. runs the agent headless (`claude -p ... --allowedTools "Read,Glob,Bash(curl *),Bash(python *)" --verbose`).
 
 You then watch the agent read `SKILL.md`, call the live API once per email, and
-print the verdict table + accuracy — all by itself.
+print a detailed breakdown for one email (verdict, ML probability, top signals, and
+the firing attributes with their evidence) followed by a compact scoreboard +
+accuracy — all by itself.
 
 ## Suggested shot list + on-screen captions
 1. **The empty-handed agent.** Show this folder — only `SKILL.md`, `inbox/`,
@@ -47,8 +49,11 @@ print the verdict table + accuracy — all by itself.
 4. **The agent works, unattended.** It reads SKILL.md, warms up, and calls the LIVE
    API per email (visible via `--verbose`).
    > *"It reads my SKILL.md and calls my hosted API on its own — no key, no typing."*
-5. **Scoreboard.** Final verdict table + accuracy.
-   > *"A stock agent succeeded using only my SKILL.md."*
+5. **Evidence + scoreboard.** The agent prints a detailed breakdown for one email
+   (the firing attributes and the exact text they matched), then the compact
+   scoreboard + accuracy.
+   > *"It doesn't just say phishing — it shows why, straight from my API. A stock
+   > agent succeeded using only my SKILL.md."*
 
 ## Files
 - `run_demo.ps1` / `run_demo.sh` — the one-command launcher.

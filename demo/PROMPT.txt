@@ -1,10 +1,26 @@
-Read SKILL.md in this folder and follow it exactly — it documents a hosted phishing-analysis API.
+Read SKILL.md in this folder and follow it exactly - it documents a hosted phishing-analysis API.
 
 Then do all of this automatically, without asking me anything:
 
 1. Warm up the service first with GET /health. It is a free-tier host and may cold-start for up to 60 seconds; if it does not return {"status":"ok"}, wait and retry once.
-2. For every .txt file in the inbox/ folder, read the file and send its FULL contents to the API via POST /analyze exactly as the skill describes. Make the HTTP requests using curl or python. Take each email's `verdict` and `risk_score` from the JSON response.
-3. Do NOT decide phishing yourself — the verdict must come only from the API response, never from your own judgment.
-4. When all emails are done, read labels.json (the ground-truth labels) and print a table with one row per email: filename | API verdict | risk_score | ground truth | correct? — then print the overall accuracy (correct / total).
 
-When comparing to the ground truth, treat an API verdict of "phishing" OR "suspicious" as "phishing" (the ground truth is only "phishing" or "legitimate").
+2. For every .txt file in the inbox/ folder, read the file and send its FULL contents to the API via POST /analyze exactly as the skill describes. Make the HTTP requests using curl or python. Keep the FULL JSON response for each email (you will need verdict, risk_score, top_signals, attributes, and classifier.phishing_probability).
+
+3. Do NOT decide phishing yourself - every verdict and score must come only from the API response, never from your own judgment.
+
+4. Then print the results in these three parts, in order:
+
+   PART A - DETAILED VIEW (one email). Pick the first email whose API verdict is "phishing" (if none is phishing, use the first email). For that email print:
+     - the filename
+     - VERDICT and risk_score, and the ML probability from classifier.phishing_probability
+     - "Top signals:" the values from the top_signals array
+     - "Why:" then the 3 attributes with the highest score that actually fired (score > 0), each on its own line as:  name  score  - explanation
+   This shows the evidence behind the decision.
+
+   PART B - SCOREBOARD. A compact table with one row per email (include the detailed one too):
+     filename | verdict | risk | top signal | ground truth | correct?
+   Read labels.json for the ground truth. When comparing, treat an API verdict of "phishing" OR "suspicious" as "phishing" (the ground truth is only "phishing" or "legitimate").
+
+   PART C - overall accuracy: correct / total, as a count and a percentage.
+
+Keep the output clean and readable - this is being shown on screen in a demo.
