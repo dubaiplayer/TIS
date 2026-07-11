@@ -5,7 +5,8 @@ Import ATTRIBUTES to run the full rule-based panel.
 """
 from . import (urgency, fear_threat, reward, curiosity, authority, financial,
                credential, generic_greeting, sender_domain, links, grammar, caps_tone,
-               sender_auth, link_deception, obfuscation, attachment_risk)
+               sender_auth, link_deception, obfuscation, attachment_risk,
+               bec, html_attack)
 
 ATTRIBUTES = [
     (urgency.NAME, urgency.score),
@@ -24,6 +25,8 @@ ATTRIBUTES = [
     (link_deception.NAME, link_deception.score),
     (obfuscation.NAME, obfuscation.score),
     (attachment_risk.NAME, attachment_risk.score),
+    (bec.NAME, bec.score),
+    (html_attack.NAME, html_attack.score),
 ]
 
 ATTRIBUTE_NAMES = [name for name, _ in ATTRIBUTES]

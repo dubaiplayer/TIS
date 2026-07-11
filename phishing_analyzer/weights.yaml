@@ -28,6 +28,8 @@ attribute_weights:
   link_deception: 1.4
   obfuscation: 1.2
   attachment_risk: 1.3
+  bec: 1.3
+  html_attack: 1.4
 
 # A SINGLE rule attribute should top out at "suspicious", not "phishing": only
 # the classifier (or several corroborating attributes) can reach a phishing
@@ -53,4 +55,4 @@ verdict_thresholds:
 
 # Attributes excluded from the vote when uncomputable (e.g. sender_domain with no
 # sender header) so absence of evidence isn't treated as evidence of safety.
-skip_when_unavailable: [sender_domain, sender_auth, attachment_risk]
+skip_when_unavailable: [sender_domain, sender_auth, attachment_risk, html_attack]

