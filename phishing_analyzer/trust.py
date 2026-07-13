@@ -61,12 +61,26 @@ _TRUSTED = {
     "santander.com", "schwab.com", "fidelity.com", "vanguard.com", "paypal.com",
     "venmo.com", "stripe.com", "wise.com", "intuit.com", "coinbase.com",
     "rbc.com", "scotiabank.com", "bmo.com", "cibc.com", "natwest.com", "lloyds.com",
-    # major providers / brands
-    "google.com", "gmail.com", "microsoft.com", "outlook.com", "office365.com",
-    "apple.com", "icloud.com", "amazon.com", "github.com", "linkedin.com",
+    # major providers / brands (their SERVICE domains, not consumer freemail - see
+    # _FREEMAIL below; gmail.com/outlook.com are deliberately NOT here)
+    "google.com", "microsoft.com", "office365.com",
+    "apple.com", "amazon.com", "github.com", "linkedin.com",
     "dropbox.com", "slack.com", "zoom.us", "netflix.com", "adobe.com", "docusign.net",
     "atlassian.com", "atlassian.net", "salesforce.com", "notion.so", "figma.com",
     "ups.com", "fedex.com", "usps.com", "dhl.com",
+}
+
+# Consumer / freemail providers. Authentication from one of these only proves the
+# sender is a real USER of that provider - NOT a trusted organization. Anyone can send
+# authenticated phishing from their own account, and these domains are also decades old
+# (so the domain-age check would wrongly clear them too). => NEVER apply the trust
+# discount to a freemail sender; let the normal analysis judge it on its merits.
+_FREEMAIL = {
+    "gmail.com", "googlemail.com", "outlook.com", "hotmail.com", "hotmail.co.uk",
+    "live.com", "msn.com", "yahoo.com", "yahoo.co.uk", "ymail.com", "rocketmail.com",
+    "aol.com", "icloud.com", "me.com", "mac.com", "proton.me", "protonmail.com",
+    "pm.me", "gmx.com", "gmx.net", "mail.com", "zoho.com", "yandex.com", "yandex.ru",
+    "fastmail.com", "hey.com", "tutanota.com", "qq.com", "163.com", "126.com",
 }
 
 
@@ -124,6 +138,8 @@ def assess(text, sender, context, attribute_results, cfg):
                "no link/attachment/obfuscation trickery"]
 
     from_dom = _addr_dom(headers.get("from") or sender)
+    if from_dom in _FREEMAIL:
+        return None  # authenticated freemail = a real user, not a trusted org -> no discount
     trusted = from_dom in _TRUSTED
     has_unsub = bool(headers.get("list_unsubscribe"))
     if trusted:
