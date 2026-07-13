@@ -26,3 +26,6 @@ Thumbs.db
 .DS_Store
 
 models/classifier_baseline.joblib
+
+extension/key.pem
+extension/.manifest_key.txt

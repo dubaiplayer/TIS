@@ -24,3 +24,21 @@ enabledEl.addEventListener("change", () =>
 apiEl.addEventListener("change", () => {
   chrome.storage.sync.set({ apiBase: apiEl.value.trim() }, checkHealth);
 });
+
+// ---- Gmail connect (header-accurate mode) ----
+const gmailBtn = document.getElementById("gmailBtn");
+
+function renderGmail(connected) {
+  gmailBtn.textContent = connected ? "✓ Gmail connected" : "Connect Gmail";
+  gmailBtn.classList.toggle("connected", !!connected);
+}
+
+chrome.runtime.sendMessage({ type: "gmailStatus" }, (r) => renderGmail(r && r.connected));
+
+gmailBtn.addEventListener("click", () => {
+  gmailBtn.textContent = "Connecting…";
+  chrome.runtime.sendMessage({ type: "gmailConnect" }, (r) => {
+    renderGmail(r && r.ok);
+    if (!r || !r.ok) gmailBtn.textContent = "Connect failed — check setup";
+  });
+});

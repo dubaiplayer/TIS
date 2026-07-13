@@ -47,6 +47,8 @@
 .pa-chip { font-size: 11px !important; background: #f1f3f4 !important; color: #3c4043 !important;
            border-radius: 12px !important; padding: 2px 9px !important; }
 .pa-evidence { font-size: 12px !important; color: #3c4043 !important; margin: 3px 0 !important; }
+.pa-src { font-size: 10.5px !important; color: #9aa0a6 !important; margin: 6px 0 2px !important;
+          font-style: italic !important; }
 
 .pa-deep { all: unset !important; cursor: pointer !important; font-family: inherit !important;
            display: inline-block !important; margin-top: 8px !important; font-size: 12px !important;

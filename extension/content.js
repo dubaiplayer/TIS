@@ -1,6 +1,7 @@
-// Inbox Shield — reads the open Gmail message, asks the local analyzer, and drops a
-// safety banner above the email body. Defensive throughout: any parse miss just means
-// "no banner", never a broken page.
+// Inbox Shield — reads the open Gmail message and drops a safety banner above the body.
+// Prefers the RAW message (with headers) via the Gmail API when connected, so the
+// sender-auth / domain-age trust works; otherwise falls back to scraping the DOM.
+// Defensive throughout: any parse miss just means "no banner", never a broken page.
 (() => {
   "use strict";
 
@@ -34,28 +35,46 @@
           n.getAttribute("data-legacy-message-id"))) return n;
       n = n.parentElement;
     }
-    return body.closest(".adn") || body.parentElement;
+    return body.closest(".adn, .h7, .gs") || body.parentElement;
+  }
+
+  function legacyId(container) {
+    if (!container) return "";
+    const legacy = container.getAttribute("data-legacy-message-id");
+    if (legacy && /^\d+$/.test(legacy)) return legacy;
+    const mid = container.getAttribute("data-message-id") || "";
+    const m = mid.match(/msg-[fa]:(\d+)/);      // "#msg-f:1783..." -> decimal
+    return m ? m[1] : "";
+  }
+
+  function apiIdFromLegacy(dec) {              // Gmail API id = hex of the decimal id
+    try { return dec ? BigInt(dec).toString(16) : ""; } catch { return ""; }
+  }
+
+  function subjectText() {
+    const h = document.querySelector("h2.hP, h2[data-thread-perm-id]");
+    if (h && h.innerText.trim()) return h.innerText.trim();
+    return (document.title || "").replace(/\s*-\s*[^-]+@[^-]+$/, "").trim();
   }
 
   function scrape(body) {
     const container = messageContainer(body);
-    const msgId =
-      (container && (container.getAttribute("data-message-id") ||
-                     container.getAttribute("data-legacy-message-id"))) ||
-      ("len:" + body.innerText.length + ":" + body.innerText.slice(0, 40));
-    const senderNode = (container || document).querySelector("span[email]");
+    const dec = legacyId(container);
+    const msgId = dec || ("len:" + body.innerText.length + ":" + body.innerText.slice(0, 40));
+    const apiMsgId = apiIdFromLegacy(dec);
+    const senderNode = (container || document).querySelector(
+      "span[email], .gD[email], .go span[email]");
     const sender = senderNode
       ? `${senderNode.getAttribute("name") || ""} <${senderNode.getAttribute("email")}>`.trim()
       : "";
-    const subject = (document.querySelector("h2.hP") || {}).innerText || "";
-    const text = `From: ${sender}\nSubject: ${subject}\n\n${body.innerText}`;
-    return { msgId, text, subject };
+    const text = `From: ${sender}\nSubject: ${subjectText()}\n\n${body.innerText}`;
+    return { msgId, apiMsgId, text };
   }
 
   // ---- banner ----
   function chip(t) { return el("span", "pa-chip", t.replace(/_/g, " ")); }
 
-  function buildBanner(report, text) {
+  function buildBanner(report, text, viaApi) {
     const v = VERDICT[report.verdict] || VERDICT.suspicious;
     const pct = Math.round((report.risk_score || 0) * 100);
     const wrap = el("div", `pa-banner ${v.cls}`);
@@ -64,29 +83,32 @@
     head.append(el("span", "pa-icon", v.icon));
     head.append(el("span", "pa-title", `${v.label} · risk ${pct}%`));
     head.append(el("span", "pa-summary", report.summary || ""));
-    const spacer = el("span", "pa-spacer"); head.append(spacer);
+    head.append(el("span", "pa-spacer"));
     const toggle = el("button", "pa-btn", "Details ▾");
     const close = el("button", "pa-btn pa-x", "✕");
     head.append(toggle, close);
     wrap.append(head);
 
-    const body = el("div", "pa-body");
-    body.style.display = "none";
-    if (report.recommendation) body.append(el("div", "pa-reco", report.recommendation));
+    const bodyEl = el("div", "pa-body");
+    bodyEl.style.display = "none";
+    if (report.recommendation) bodyEl.append(el("div", "pa-reco", report.recommendation));
 
     if ((report.top_signals || []).length) {
       const sig = el("div", "pa-chips");
       sig.append(el("span", "pa-chips-label", "Signals:"));
       report.top_signals.slice(0, 5).forEach((s) => sig.append(chip(s)));
-      body.append(sig);
+      bodyEl.append(sig);
     }
-    // top 2 firing attributes with evidence-y explanation
     (report.attributes || [])
       .filter((a) => a.score >= 0.35 && a.explanation)
       .sort((a, b) => b.score - a.score)
       .slice(0, 2)
-      .forEach((a) => body.append(el("div", "pa-evidence",
+      .forEach((a) => bodyEl.append(el("div", "pa-evidence",
         `• ${a.name.replace(/_/g, " ")}: ${a.explanation}`)));
+
+    bodyEl.append(el("div", "pa-src",
+      viaApi ? "Analyzed full message incl. headers (Gmail API)."
+             : "Analyzed visible text only — connect Gmail in the popup for header-accurate checks."));
 
     const deep = el("button", "pa-deep", "🔗 Deep scan links (Link X-ray)");
     const deepOut = el("div", "pa-deep-out");
@@ -108,12 +130,12 @@
         });
       });
     });
-    body.append(deep, deepOut);
-    wrap.append(body);
+    bodyEl.append(deep, deepOut);
+    wrap.append(bodyEl);
 
     toggle.addEventListener("click", () => {
-      const open = body.style.display !== "none";
-      body.style.display = open ? "none" : "block";
+      const open = bodyEl.style.display !== "none";
+      bodyEl.style.display = open ? "none" : "block";
       toggle.textContent = open ? "Details ▾" : "Details ▴";
     });
     close.addEventListener("click", () => wrap.remove());
@@ -131,24 +153,36 @@
     return wrap;
   }
 
-  function place(body, node) {
-    body.parentElement.insertBefore(node, body);
-  }
+  function place(body, node) { body.parentElement.insertBefore(node, body); }
 
   // ---- scan loop ----
   const done = new WeakSet();
+
+  function analyzeBody(body) {
+    const info = scrape(body);
+    const finish = (text, viaApi) =>
+      chrome.runtime.sendMessage({ type: "analyze", text, msgId: info.msgId }, (r) => {
+        if (!body.isConnected) return;
+        if (!r || r.error) { place(body, offlineBanner()); return; }
+        if (r.data) place(body, buildBanner(r.data, text, viaApi));
+      });
+    // Prefer the raw message (with headers) via the Gmail API; fall back to DOM text.
+    if (info.apiMsgId) {
+      chrome.runtime.sendMessage({ type: "gmailRaw", apiMsgId: info.apiMsgId }, (r) => {
+        if (r && r.raw) finish(r.raw, true);
+        else finish(info.text, false);
+      });
+    } else {
+      finish(info.text, false);
+    }
+  }
 
   function scanOnce() {
     if (!enabled) return;
     document.querySelectorAll("div.a3s").forEach((body) => {
       if (done.has(body) || body.offsetParent === null) return;
       done.add(body);
-      const info = scrape(body);
-      chrome.runtime.sendMessage({ type: "analyze", text: info.text, msgId: info.msgId }, (r) => {
-        if (!body.isConnected) return;
-        if (!r || r.error) { place(body, offlineBanner()); return; }
-        if (r.data) place(body, buildBanner(r.data, info.text));
-      });
+      analyzeBody(body);
     });
   }
 
@@ -158,5 +192,5 @@
     timer = setTimeout(scanOnce, 400);
   });
   observer.observe(document.body, { childList: true, subtree: true });
-  setTimeout(scanOnce, 1200); // initial
+  setTimeout(scanOnce, 1200);
 })();

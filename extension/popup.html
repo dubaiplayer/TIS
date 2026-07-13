@@ -23,6 +23,10 @@
     .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
     .on { background: #22c55e; } .off { background: #ef4444; }
     .note { font-size: 10.5px; color: #5f6368; margin-top: 12px; line-height: 1.4; }
+    .gbtn { font-size: 12px; padding: 5px 10px; border: 1px solid #1a73e8; background: #fff;
+            color: #1a73e8; border-radius: 6px; cursor: pointer; }
+    .gbtn.connected { border-color: #22c55e; color: #15803d; }
+    .ghint { font-size: 10.5px; color: #5f6368; margin-top: 4px; line-height: 1.4; }
   </style>
 </head>
 <body>
@@ -40,6 +44,14 @@
   </div>
 
   <div class="status"><span id="dot" class="dot off"></span><span id="statusText">checking…</span></div>
+
+  <div class="row" style="margin-top:14px;">
+    <label>Header-accurate mode</label>
+    <button id="gmailBtn" class="gbtn">Connect Gmail</button>
+  </div>
+  <div class="ghint">Optional: reads full message headers via the Gmail API so the
+    sender-authentication &amp; domain-age checks work. Without it, only the visible
+    text is analyzed.</div>
 
   <div class="note">Emails are analyzed only by <b>your local Phishing Analyzer</b>
     (the URL above). Content never leaves your machine. Run the backend, then open an
