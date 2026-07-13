@@ -50,6 +50,38 @@
 .pa-src { font-size: 10.5px !important; color: #9aa0a6 !important; margin: 6px 0 2px !important;
           font-style: italic !important; }
 
+/* attribute bar chart + keyword highlight (mirrors the desktop UI) */
+.pa-section { margin-top: 12px !important; }
+.pa-section-h { font-size: 12px !important; font-weight: 600 !important; color: #202124 !important;
+                margin-bottom: 6px !important; }
+.pa-muted { font-size: 11.5px !important; color: #9aa0a6 !important; }
+
+.pa-bars { display: flex !important; flex-direction: column !important; gap: 3px !important; }
+.pa-bar-row { display: flex !important; align-items: center !important; gap: 8px !important;
+              font-size: 11px !important; }
+.pa-bar-name { flex: 0 0 108px !important; width: 108px !important; text-align: right !important;
+               color: #3c4043 !important; white-space: nowrap !important; overflow: hidden !important;
+               text-overflow: ellipsis !important; }
+.pa-bar-track { flex: 1 1 auto !important; height: 10px !important; background: #eceef1 !important;
+                border-radius: 5px !important; overflow: hidden !important; }
+.pa-bar-fill { display: block !important; height: 100% !important; border-radius: 5px !important;
+               min-width: 2px !important; }
+.pa-bar-val { flex: 0 0 30px !important; color: #5f6368 !important;
+              font-variant-numeric: tabular-nums !important; }
+
+.pa-cloud { display: flex !important; flex-wrap: wrap !important; gap: 5px !important;
+            align-items: center !important; margin-bottom: 8px !important; }
+.pa-kw { border-radius: 12px !important; padding: 1px 8px !important; line-height: 1.6 !important; }
+.pa-kw-phish { background: rgba(239, 68, 68, 0.12) !important; color: #b91c1c !important; }
+.pa-kw-legit { background: rgba(34, 197, 94, 0.14) !important; color: #15803d !important;
+               font-size: 11px !important; }
+.pa-hl { font-family: "Roboto Mono", monospace !important; font-size: 11.5px !important;
+         white-space: pre-wrap !important; word-break: break-word !important; line-height: 1.55 !important;
+         background: #fafbfc !important; border: 1px solid #eceef1 !important; border-radius: 8px !important;
+         padding: 8px 10px !important; max-height: 220px !important; overflow: auto !important;
+         color: #3c4043 !important; }
+.pa-mark { border-radius: 2px !important; padding: 0 1px !important; color: #202124 !important; }
+
 .pa-deep { all: unset !important; cursor: pointer !important; font-family: inherit !important;
            display: inline-block !important; margin-top: 8px !important; font-size: 12px !important;
            color: #1a73e8 !important; border: 1px solid #d2e3fc !important; background: #f8fbff !important;

@@ -74,6 +74,78 @@
   // ---- banner ----
   function chip(t) { return el("span", "pa-chip", t.replace(/_/g, " ")); }
 
+  // Attribute score bar chart (mirrors the desktop AttributeBarChart colors).
+  function attrColor(s) {
+    if (s >= 0.66) return "#ef4444";
+    if (s >= 0.33) return "#f59e0b";
+    if (s > 0) return "#eab308";
+    return "#c9ced6";
+  }
+  function buildBarChart(attributes) {
+    const wrap = el("div", "pa-section");
+    wrap.append(el("div", "pa-section-h", "Attribute scores"));
+    const bars = el("div", "pa-bars");
+    attributes.slice().sort((a, b) => b.score - a.score).forEach((a) => {
+      const row = el("div", "pa-bar-row");
+      row.append(el("span", "pa-bar-name", a.name.replace(/_/g, " ")));
+      const track = el("span", "pa-bar-track");
+      const fill = el("span", "pa-bar-fill");
+      fill.style.width = Math.round(a.score * 100) + "%";
+      fill.style.background = attrColor(a.score);
+      track.append(fill);
+      row.append(track, el("span", "pa-bar-val", a.score.toFixed(2)));
+      bars.append(row);
+    });
+    wrap.append(bars);
+    return wrap;
+  }
+
+  // Classifier keyword highlighting (mirrors the desktop KeywordHighlight).
+  function mergeSpans(keywords) {
+    const spans = [];
+    keywords.filter((k) => k.direction === "phishing")
+      .forEach((k) => k.spans.forEach((s) => spans.push({ ...s, intensity: k.intensity })));
+    spans.sort((a, b) => a.start - b.start);
+    const out = []; let lastEnd = -1;
+    for (const s of spans) { if (s.start >= lastEnd) { out.push(s); lastEnd = s.end; } }
+    return out;
+  }
+  function buildKeywords(report) {
+    const kws = (report.classifier && report.classifier.keyword_attributions) || [];
+    const wrap = el("div", "pa-section");
+    wrap.append(el("div", "pa-section-h", "Flagged words"));
+    if (!kws.length) {
+      wrap.append(el("div", "pa-muted", "No classifier keywords for this email."));
+      return wrap;
+    }
+    const cloud = el("div", "pa-cloud");
+    kws.filter((k) => k.direction === "phishing").slice(0, 16).forEach((k) => {
+      const c = el("span", "pa-kw pa-kw-phish", k.term);
+      c.style.fontSize = (11 + 7 * k.intensity).toFixed(0) + "px";
+      c.style.opacity = (0.6 + 0.4 * k.intensity).toFixed(2);
+      cloud.append(c);
+    });
+    kws.filter((k) => k.direction === "legitimate").slice(0, 6)
+      .forEach((k) => cloud.append(el("span", "pa-kw pa-kw-legit", k.term)));
+    wrap.append(cloud);
+
+    const text = report.analyzed_text || "";
+    if (text) {
+      const pre = el("div", "pa-hl");
+      let cur = 0;
+      mergeSpans(kws).forEach((s) => {
+        if (s.start > cur) pre.append(document.createTextNode(text.slice(cur, s.start)));
+        const m = el("mark", "pa-mark", text.slice(s.start, s.end));
+        m.style.background = `rgba(239,68,68,${(0.2 + 0.5 * s.intensity).toFixed(2)})`;
+        pre.append(m);
+        cur = s.end;
+      });
+      if (cur < text.length) pre.append(document.createTextNode(text.slice(cur)));
+      wrap.append(pre);
+    }
+    return wrap;
+  }
+
   function buildBanner(report, text, viaApi) {
     const v = VERDICT[report.verdict] || VERDICT.suspicious;
     const pct = Math.round((report.risk_score || 0) * 100);
@@ -105,6 +177,9 @@
       .slice(0, 2)
       .forEach((a) => bodyEl.append(el("div", "pa-evidence",
         `• ${a.name.replace(/_/g, " ")}: ${a.explanation}`)));
+
+    if ((report.attributes || []).length) bodyEl.append(buildBarChart(report.attributes));
+    bodyEl.append(buildKeywords(report));
 
     bodyEl.append(el("div", "pa-src",
       viaApi ? "Analyzed full message incl. headers (Gmail API)."

@@ -2,10 +2,10 @@
   "manifest_version": 3,
   "name": "Phishing Analyzer — Inbox Shield",
   "description": "Grammarly-style phishing safety check inside Gmail. Analyzes each email you open with your local Phishing Analyzer and shows an inline verdict. Email content stays on your machine.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAw+a8sOUxMZL/e31Nrlhw4jMyo0YJ31pjfCfncfmdzydXULPbhIPiBvIsI92K7gzzZ1JxA5F5z17T1uHwdeXLLX41mzND7kqmSLWTIvBGT0frFR/GZJ0UzT3BSRMeplbVqTPy9fW9Y/+sQTe5guTbqi6/CyYijKzkJiNIYRqD+VrPnTA7GqmTUb9+HDUuY07HXO6yBxpxTTACeYEaA378v9rUV2eR/Ji7rNIsHl5sTfAnLZcmqHXzOtjHNo9YH9UtfyflHSy44mE4uoZOEmXQPLENb3Kx1YDTQvhmGxAEB6j+Wu/Ba5oW/OFdVFPftturXkFp8AbhZh11RteReAmkKQIDAQAB",
   "oauth2": {
-    "client_id": "REPLACE_WITH_YOUR_CHROME_EXTENSION_OAUTH_CLIENT_ID.apps.googleusercontent.com",
+    "client_id": "801685071453-355u9liuf0375f07jtthsrtc7n82d5fm.apps.googleusercontent.com",
     "scopes": ["https://www.googleapis.com/auth/gmail.readonly"]
   },
   "action": {
