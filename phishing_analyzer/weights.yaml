@@ -65,8 +65,12 @@ verdict_thresholds:
 # headers -> no change, so body-only text keeps the original rule/ML balance.
 sender_trust:
   enabled: true
-  legitimate_cap: 0.2   # authenticated + consistent + (known brand OR List-Unsubscribe)
-  suspicious_cap: 0.5   # authenticated + consistent, but an unknown sender domain
+  legitimate_cap: 0.2   # authenticated + consistent + (known brand / List-Unsubscribe / old domain)
+  suspicious_cap: 0.5   # authenticated + consistent, but an unknown, unestablished domain
+  # Established-domain trust: an authenticated email from a domain registered years
+  # ago is a real organization; clear it without an allowlist via an RDAP age lookup.
+  use_domain_age: true
+  min_domain_age_days: 365
 
 # Attributes excluded from the vote when uncomputable (e.g. sender_domain with no
 # sender header) so absence of evidence isn't treated as evidence of safety.

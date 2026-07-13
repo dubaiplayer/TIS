@@ -40,9 +40,23 @@ def test_body_only_is_unchanged():
     assert _verdict(BODY) == "phishing"
 
 
-def test_authenticated_unknown_domain_is_capped_at_suspicious_not_cleared():
-    # Authenticated but no brand match and no List-Unsubscribe: an attacker can
-    # authenticate their own throwaway domain, so this is softened, not cleared.
-    raw = ("From: X <x@randomshop123.com>\nSubject: verify\n"
-           + _AUTH.format(d="randomshop123.com") + "\n" + BODY)
+def test_authenticated_new_domain_is_capped_at_suspicious_not_cleared(monkeypatch):
+    # Authenticated, no brand match, no List-Unsubscribe, and a freshly-registered
+    # domain (age lookup returns None/new): an attacker can authenticate their own
+    # throwaway domain, so this is softened, not cleared. (RDAP mocked -> offline.)
+    from phishing_analyzer import trust
+    monkeypatch.setattr(trust, "_domain_age_days_safe", lambda d: None)
+    raw = ("From: X <x@account-verify-2026.com>\nSubject: verify\n"
+           + _AUTH.format(d="account-verify-2026.com") + "\n" + BODY)
     assert _verdict(raw) == "suspicious"
+
+
+def test_authenticated_established_domain_is_cleared(monkeypatch):
+    # An authenticated, self-consistent email from a domain registered years ago is a
+    # real organization (genuine verification/billing mail) -> legitimate, no allowlist
+    # needed. (RDAP mocked to a large age -> offline + deterministic.)
+    from phishing_analyzer import trust
+    monkeypatch.setattr(trust, "_domain_age_days_safe", lambda d: 9000)
+    raw = ("From: Acme <no-reply@acme-corp-unlisted.com>\nSubject: Security notice\n"
+           + _AUTH.format(d="acme-corp-unlisted.com") + "\n" + BODY)
+    assert _verdict(raw) == "legitimate"
