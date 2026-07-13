@@ -1,0 +1,65 @@
+/* Inbox Shield banner — light, clean, sits above the Gmail message body.
+   Scoped under .pa- and marked !important to survive Gmail's own styles. */
+.pa-banner {
+  all: initial;
+  display: block !important;
+  box-sizing: border-box !important;
+  font-family: "Google Sans", Roboto, Arial, sans-serif !important;
+  margin: 8px 0 14px !important;
+  border: 1px solid #e3e6ea !important;
+  border-left-width: 4px !important;
+  border-radius: 10px !important;
+  background: #fff !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06) !important;
+  padding: 10px 12px !important;
+  color: #202124 !important;
+  line-height: 1.45 !important;
+}
+.pa-phishing   { border-left-color: #ef4444 !important; background: #fff5f5 !important; }
+.pa-suspicious { border-left-color: #f59e0b !important; background: #fffaf0 !important; }
+.pa-legitimate { border-left-color: #22c55e !important; background: #f4fdf7 !important; }
+.pa-offline    { border-left-color: #9aa0a6 !important; background: #f8f9fa !important; }
+
+.pa-head { display: flex !important; align-items: center !important; gap: 8px !important;
+           flex-wrap: wrap !important; }
+.pa-icon { font-size: 15px !important; }
+.pa-title { font-weight: 700 !important; font-size: 13px !important; letter-spacing: .3px !important; }
+.pa-phishing   .pa-title { color: #b91c1c !important; }
+.pa-suspicious .pa-title { color: #b45309 !important; }
+.pa-legitimate .pa-title { color: #15803d !important; }
+.pa-offline    .pa-title { color: #5f6368 !important; }
+.pa-summary { font-size: 12.5px !important; color: #5f6368 !important; flex: 1 1 auto !important;
+              min-width: 120px !important; }
+.pa-spacer { flex: 1 1 auto !important; }
+
+.pa-btn { all: unset !important; cursor: pointer !important; font-family: inherit !important;
+          font-size: 12px !important; color: #1a73e8 !important; padding: 2px 6px !important;
+          border-radius: 4px !important; }
+.pa-btn:hover { background: rgba(26, 115, 232, 0.08) !important; }
+.pa-x { color: #9aa0a6 !important; }
+
+.pa-body { margin-top: 10px !important; border-top: 1px solid #eceef1 !important;
+           padding-top: 10px !important; }
+.pa-reco { font-size: 12.5px !important; color: #202124 !important; margin-bottom: 8px !important; }
+.pa-chips { display: flex !important; flex-wrap: wrap !important; align-items: center !important;
+            gap: 6px !important; margin-bottom: 8px !important; }
+.pa-chips-label { font-size: 11.5px !important; color: #5f6368 !important; }
+.pa-chip { font-size: 11px !important; background: #f1f3f4 !important; color: #3c4043 !important;
+           border-radius: 12px !important; padding: 2px 9px !important; }
+.pa-evidence { font-size: 12px !important; color: #3c4043 !important; margin: 3px 0 !important; }
+
+.pa-deep { all: unset !important; cursor: pointer !important; font-family: inherit !important;
+           display: inline-block !important; margin-top: 8px !important; font-size: 12px !important;
+           color: #1a73e8 !important; border: 1px solid #d2e3fc !important; background: #f8fbff !important;
+           border-radius: 16px !important; padding: 4px 12px !important; }
+.pa-deep:hover { background: #eef5ff !important; }
+.pa-deep-out { margin-top: 8px !important; }
+.pa-deep-sum { font-size: 12px !important; font-weight: 600 !important; color: #202124 !important;
+               margin-bottom: 6px !important; }
+.pa-link { font-family: "Roboto Mono", monospace !important; font-size: 11px !important;
+           border: 1px solid #eceef1 !important; border-radius: 8px !important; padding: 6px 8px !important;
+           margin-bottom: 6px !important; word-break: break-all !important; }
+.pa-link-bad { border-color: #f5c2c2 !important; background: #fff5f5 !important; }
+.pa-link-url { color: #5f6368 !important; }
+.pa-link-dest { color: #202124 !important; }
+.pa-link-why { color: #b91c1c !important; margin-top: 2px !important; }

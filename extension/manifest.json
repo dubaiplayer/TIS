@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "Phishing Analyzer — Inbox Shield",
+  "description": "Grammarly-style phishing safety check inside Gmail. Analyzes each email you open with your local Phishing Analyzer and shows an inline verdict. Email content stays on your machine.",
+  "version": "0.1.0",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Inbox Shield settings",
+    "default_icon": {
+      "16": "icons/16.png",
+      "48": "icons/48.png",
+      "128": "icons/128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/16.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": ["storage"],
+  "host_permissions": [
+    "http://localhost:8008/*",
+    "http://127.0.0.1:8008/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://mail.google.com/*"],
+      "js": ["content.js"],
+      "css": ["banner.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}
