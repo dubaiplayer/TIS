@@ -23,15 +23,25 @@ import tldextract
 # Major senders whose *authenticated* mail must not be called phishing on wording
 # alone (registrable domains). A spoof of these fails DMARC and is unaffected.
 _TRUSTED = {
-    "google.com", "gmail.com", "googlemail.com", "youtube.com", "microsoft.com",
-    "outlook.com", "office365.com", "office.com", "live.com", "microsoftonline.com",
-    "apple.com", "icloud.com", "amazon.com", "amazonaws.com", "paypal.com",
+    "google.com", "youtube.com", "microsoft.com",
+    "office365.com", "office.com", "microsoftonline.com",
+    "apple.com", "amazon.com", "amazonaws.com", "paypal.com",
     "github.com", "gitlab.com", "linkedin.com", "facebook.com", "facebookmail.com",
     "instagram.com", "meta.com", "x.com", "twitter.com", "dropbox.com", "slack.com",
     "zoom.us", "netflix.com", "spotify.com", "adobe.com", "atlassian.com",
     "notion.so", "stripe.com", "docusign.net", "salesforce.com", "intuit.com",
     "chase.com", "bankofamerica.com", "wellsfargo.com", "citi.com", "citibank.com",
     "americanexpress.com", "capitalone.com", "discover.com", "usbank.com",
+}
+
+# Consumer / freemail: authentication only proves a real USER of the provider, not a
+# trusted org - anyone can send authenticated phishing from their own account. Never
+# clear these on brand/DMARC; let the analysis judge them.
+_FREEMAIL = {
+    "gmail.com", "googlemail.com", "outlook.com", "hotmail.com", "hotmail.co.uk",
+    "live.com", "msn.com", "yahoo.com", "yahoo.co.uk", "ymail.com", "aol.com",
+    "icloud.com", "me.com", "mac.com", "proton.me", "protonmail.com", "gmx.com",
+    "mail.com", "zoho.com", "yandex.com", "yandex.ru", "qq.com", "163.com",
 }
 
 _ACTION = {"legitimate": "allow", "suspicious": "warn"}
@@ -109,6 +119,8 @@ def adjust(report, raw: str, from_addr: str):
         return report
 
     dom = _reg_domain(from_addr)
+    if dom in _FREEMAIL:
+        return report  # authenticated freemail = a real user, not a trusted org -> keep flagged
     if dom in _TRUSTED:
         return _downgrade(
             report, "legitimate",
