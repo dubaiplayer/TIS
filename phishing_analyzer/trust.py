@@ -65,6 +65,7 @@ _TRUSTED = {
     "google.com", "gmail.com", "microsoft.com", "outlook.com", "office365.com",
     "apple.com", "icloud.com", "amazon.com", "github.com", "linkedin.com",
     "dropbox.com", "slack.com", "zoom.us", "netflix.com", "adobe.com", "docusign.net",
+    "atlassian.com", "atlassian.net", "salesforce.com", "notion.so", "figma.com",
     "ups.com", "fedex.com", "usps.com", "dhl.com",
 }
 
@@ -80,6 +81,18 @@ def _attr(results, name):
         if r.name == name:
             return r.score
     return 0.0
+
+
+def _domain_age_days_safe(domain):
+    """Registration age in days via RDAP, or None on any failure/timeout. Lazily
+    imported so the offline core never hard-depends on the network path."""
+    if not domain:
+        return None
+    try:
+        from .link_xray import _domain_age_days
+        return _domain_age_days(domain)
+    except Exception:
+        return None
 
 
 def assess(text, sender, context, attribute_results, cfg):
@@ -118,9 +131,23 @@ def assess(text, sender, context, attribute_results, cfg):
     if has_unsub:
         reasons.append("carries List-Unsubscribe (genuine bulk/transactional mail)")
 
+    legit = float(conf.get("legitimate_cap", 0.2))
     if trusted or has_unsub:
-        return {"cap": float(conf.get("legitimate_cap", 0.2)),
-                "tier": "trusted", "reasons": reasons}
-    reasons.append("unknown sender domain, so capped at 'suspicious' rather than cleared")
+        return {"cap": legit, "tier": "trusted", "reasons": reasons}
+
+    # Established-domain trust: an authenticated, self-consistent email from a domain
+    # registered years ago is a real organization (a bank, SaaS, employer) - genuine
+    # verification/security/billing mail. Phishing uses freshly-registered domains or
+    # fails auth, so this clears real companies without maintaining an allowlist.
+    if conf.get("use_domain_age", True):
+        min_age = int(conf.get("min_domain_age_days", 365))
+        age = _domain_age_days_safe(from_dom)
+        if age is not None and age >= min_age:
+            yrs = age / 365.0
+            reasons.append(f"{from_dom} is a well-established domain "
+                           f"(registered ~{yrs:.0f} year(s) ago)")
+            return {"cap": legit, "tier": "established", "reasons": reasons}
+
+    reasons.append("unknown, unestablished sender domain, so capped at 'suspicious'")
     return {"cap": float(conf.get("suspicious_cap", 0.5)),
             "tier": "authenticated", "reasons": reasons}
