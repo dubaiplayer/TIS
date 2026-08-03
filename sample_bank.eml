@@ -1,0 +1,29 @@
+From: Chase <no.reply.alerts@chase.com>
+To: you@example.com
+Subject: Your account security alert
+Date: Fri, 11 Jul 2026 09:14:22 -0400
+Return-Path: <bounce@chase.com>
+Reply-To: Chase <no.reply.alerts@chase.com>
+Authentication-Results: mx.google.com; spf=pass smtp.mailfrom=chase.com; dkim=pass header.d=chase.com; dmarc=pass (p=REJECT) header.from=chase.com
+List-Unsubscribe: <https://www.chase.com/preferences/unsubscribe>
+Message-ID: <20260711091422.A1B2C3@chase.com>
+Content-Type: text/plain; charset="UTF-8"
+
+Dear Customer,
+
+We detected a new sign-in to your Chase account from a new device. If this
+was you, no action is needed.
+
+If you don't recognize this activity, your account may be at risk. Please
+verify your recent activity and confirm your identity as soon as possible to
+keep your account secure:
+
+https://www.chase.com/security/review-activity
+
+For your protection, never share your password or one-time code with anyone.
+Chase will never ask for your full Social Security number or PIN by email.
+
+Thank you,
+Chase Security Team
+
+This is a service email. To manage alert preferences, visit chase.com.
