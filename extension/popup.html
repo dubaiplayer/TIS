@@ -40,22 +40,14 @@
 
   <div class="row">
     <label for="apiBase">Analyzer URL</label>
-    <input type="text" id="apiBase" placeholder="http://localhost:8008" />
+    <input type="text" id="apiBase" placeholder="https://phishing-analyzer-api-wq1v.onrender.com" />
   </div>
 
   <div class="status"><span id="dot" class="dot off"></span><span id="statusText">checking…</span></div>
 
-  <div class="row" style="margin-top:14px;">
-    <label>Header-accurate mode</label>
-    <button id="gmailBtn" class="gbtn">Connect Gmail</button>
-  </div>
-  <div class="ghint">Optional: reads full message headers via the Gmail API so the
-    sender-authentication &amp; domain-age checks work. Without it, only the visible
-    text is analyzed.</div>
-
-  <div class="note">Emails are analyzed only by <b>your local Phishing Analyzer</b>
-    (the URL above). Content never leaves your machine. Run the backend, then open an
-    email in Gmail.</div>
+  <div class="note">The email you open is sent to the <b>Phishing Analyzer</b> service
+    (the URL above) to be checked for phishing, and is not stored. Open an email in
+    Gmail to see a verdict.</div>
 
   <script src="popup.js"></script>
 </body>

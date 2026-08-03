@@ -146,7 +146,7 @@
     return wrap;
   }
 
-  function buildBanner(report, text, viaApi) {
+  function buildBanner(report, text) {
     const v = VERDICT[report.verdict] || VERDICT.suspicious;
     const pct = Math.round((report.risk_score || 0) * 100);
     const wrap = el("div", `pa-banner ${v.cls}`);
@@ -180,10 +180,6 @@
 
     if ((report.attributes || []).length) bodyEl.append(buildBarChart(report.attributes));
     bodyEl.append(buildKeywords(report));
-
-    bodyEl.append(el("div", "pa-src",
-      viaApi ? "Analyzed full message incl. headers (Gmail API)."
-             : "Analyzed visible text only — connect Gmail in the popup for header-accurate checks."));
 
     const deep = el("button", "pa-deep", "🔗 Deep scan links (Link X-ray)");
     const deepOut = el("div", "pa-deep-out");
@@ -221,9 +217,9 @@
     const wrap = el("div", "pa-banner pa-offline");
     const head = el("div", "pa-head");
     head.append(el("span", "pa-icon", "○"));
-    head.append(el("span", "pa-title", "Analyzer offline"));
+    head.append(el("span", "pa-title", "Analyzer unavailable"));
     head.append(el("span", "pa-summary",
-      "Start the local Phishing Analyzer (localhost:8008) to check this email."));
+      "Couldn't reach the Phishing Analyzer service — please try again in a moment."));
     wrap.append(head);
     return wrap;
   }
@@ -235,21 +231,11 @@
 
   function analyzeBody(body) {
     const info = scrape(body);
-    const finish = (text, viaApi) =>
-      chrome.runtime.sendMessage({ type: "analyze", text, msgId: info.msgId }, (r) => {
-        if (!body.isConnected) return;
-        if (!r || r.error) { place(body, offlineBanner()); return; }
-        if (r.data) place(body, buildBanner(r.data, text, viaApi));
-      });
-    // Prefer the raw message (with headers) via the Gmail API; fall back to DOM text.
-    if (info.apiMsgId) {
-      chrome.runtime.sendMessage({ type: "gmailRaw", apiMsgId: info.apiMsgId }, (r) => {
-        if (r && r.raw) finish(r.raw, true);
-        else finish(info.text, false);
-      });
-    } else {
-      finish(info.text, false);
-    }
+    chrome.runtime.sendMessage({ type: "analyze", text: info.text, msgId: info.msgId }, (r) => {
+      if (!body.isConnected) return;
+      if (!r || r.error) { place(body, offlineBanner()); return; }
+      if (r.data) place(body, buildBanner(r.data, info.text));
+    });
   }
 
   function scanOnce() {
