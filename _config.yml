@@ -1,0 +1,10 @@
+# GitHub Pages config — serves PRIVACY.md as a rendered page at
+# https://dubaiplayer.github.io/TIS/PRIVACY
+#
+# The Chrome Web Store requires a public privacy-policy URL for extensions that
+# handle personal communications, which this one does (it transmits the text of
+# the email you open). Without a theme + front matter, Jekyll would copy the
+# markdown verbatim and the URL would serve raw text instead of a page.
+theme: jekyll-theme-minimal
+title: Inbox Shield
+description: Phishing Analyzer — Inbox Shield: privacy policy and project documentation

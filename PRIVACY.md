@@ -1,3 +1,8 @@
+---
+layout: default
+title: Privacy Policy — Inbox Shield
+---
+
 # Privacy Policy — Phishing Analyzer (Inbox Shield)
 
 **Last updated: August 2026**
@@ -13,6 +18,14 @@ When you **open an email in Gmail**, the Extension reads that single email as sh
 the page — its **sender, subject, body text, and the links it contains** — and sends
 that text to the Phishing Analyzer service to be checked. It does this only for the
 email you are currently viewing.
+
+The Extension also reads the **sender-authentication result that Gmail itself displays**
+for that message (the "mailed-by" and "signed-by" values shown under *Show details*), and
+sends it along with the text. This is Gmail's own verification of whether the message
+genuinely came from the domain it claims, and it lets the analyzer avoid wrongly flagging
+legitimate mail from banks, retailers, and other services. It is read from Gmail's own
+interface — the Extension does not perform any authentication check of its own, and does
+not access your account to obtain it.
 
 The Extension also stores your **settings** (whether automatic scanning is on, and the
 analyzer address) in your browser's extension storage.
