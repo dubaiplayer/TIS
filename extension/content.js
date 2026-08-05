@@ -1,6 +1,7 @@
 // Inbox Shield — reads the open Gmail message and drops a safety banner above the body.
-// Prefers the RAW message (with headers) via the Gmail API when connected, so the
-// sender-auth / domain-age trust works; otherwise falls back to scraping the DOM.
+// Scrapes the message from the DOM and, where Gmail exposes its own SPF/DKIM verdict
+// ("mailed-by" / "signed-by"), forwards that as RFC822 auth headers so the analyzer's
+// sender-trust discount can clear genuine transactional mail. No OAuth scope needed.
 // Defensive throughout: any parse miss just means "no banner", never a broken page.
 (() => {
   "use strict";
@@ -12,13 +13,41 @@
   };
 
   let enabled = true;
-  chrome.storage.sync.get("enabled", (o) => { enabled = o.enabled !== false; });
-  chrome.storage.onChanged.addListener((c) => {
-    if (c.enabled) {
-      enabled = c.enabled.newValue !== false;
-      if (!enabled) document.querySelectorAll(".pa-banner").forEach((b) => b.remove());
-    }
-  });
+
+  // Reloading or auto-updating the extension invalidates the context of content
+  // scripts already injected into open tabs: chrome.runtime goes undefined while
+  // this script keeps running against the page. Guard every call and stand down
+  // for the life of the tab instead of throwing on each scan.
+  let observer = null, timer = null;
+  const alive = () => {
+    try { return !!(chrome.runtime && chrome.runtime.id); } catch { return false; }
+  };
+
+  function teardown() {
+    if (observer) { observer.disconnect(); observer = null; }
+    clearTimeout(timer);
+    enabled = false;
+  }
+
+  function send(msg, cb) {
+    if (!alive()) { teardown(); cb(null); return; }
+    try {
+      chrome.runtime.sendMessage(msg, (r) => {
+        if (chrome.runtime.lastError) { cb(null); return; }  // reading it also silences it
+        cb(r);
+      });
+    } catch { teardown(); cb(null); }
+  }
+
+  try {
+    chrome.storage.sync.get("enabled", (o) => { enabled = o.enabled !== false; });
+    chrome.storage.onChanged.addListener((c) => {
+      if (c.enabled) {
+        enabled = c.enabled.newValue !== false;
+        if (!enabled) document.querySelectorAll(".pa-banner").forEach((b) => b.remove());
+      }
+    });
+  } catch { teardown(); }
 
   const el = (tag, cls, text) => {
     const n = document.createElement(tag);
@@ -57,6 +86,82 @@
     return (document.title || "").replace(/\s*-\s*[^-]+@[^-]+$/, "").trim();
   }
 
+  // ---- sender authentication: the third signal ----
+  // Gmail already ran SPF/DKIM/DMARC when the message was delivered, and renders the
+  // outcome in the message details table as "mailed-by" (the SPF domain) and
+  // "signed-by" (the DKIM domain). We read ITS verdict rather than re-deriving one,
+  // then pass it to the analyzer as real RFC822 auth headers so the server-side
+  // sender-trust discount (phishing_analyzer/trust.py) can engage. Without this the
+  // analyzer sees no auth headers, returns None, and genuine transactional mail from
+  // Google/Atlassian/banks scores on wording alone -> false positives.
+  //
+  // SECURITY: read ONLY from Gmail's own chrome (the details table). Never from the
+  // message body, which is attacker-controlled and could otherwise forge a
+  // "signed-by: google.com" line straight into a trust discount.
+
+  // Match on the row LABELS ("mailed-by:", "signed-by:") rather than pinning a
+  // selector to today's obfuscated class names, which Gmail churns. The row's own
+  // text is label+value run together ("mailed-by:atlassian-bounces.atlassian.net"),
+  // so strip the label off the front instead of guessing the cell structure.
+  function readAuthRows(scope) {
+    const out = {};
+    scope.querySelectorAll("span, td").forEach((el) => {
+      const label = el.textContent.trim().toLowerCase();
+      const key = label === "mailed-by:" ? "mailedBy"
+                : label === "signed-by:" ? "signedBy" : null;
+      if (!key || out[key]) return;
+      const row = el.closest("tr") || el.parentElement;
+      if (!row) return;
+      const v = row.textContent.trim()
+        .replace(/^(mailed|signed)-by:\s*/i, "").trim().toLowerCase();
+      if (v && !/\s/.test(v) && v.includes(".")) out[key] = v;   // a bare domain
+    });
+    return out;
+  }
+
+  // Gmail builds that table lazily — it does not exist until the "Show details"
+  // caret is clicked. So expand, read, and collapse inside ONE synchronous task:
+  // the browser cannot paint between them, so the user sees no flicker. If Gmail
+  // ever defers the build, the read simply comes back empty and we fall through to
+  // no-auth (today's behavior) rather than leaving the panel open.
+  function gmailAuth(container) {
+    if (!container) return {};
+    const already = readAuthRows(container);
+    if (already.mailedBy && already.signedBy) return already;   // user expanded it
+    const show = container.querySelector('[aria-label="Show details"], div.ajy');
+    if (!show) return already;
+    let rows = already;
+    try {
+      show.click();
+      rows = readAuthRows(container);
+    } catch { /* leave rows as-is */ }
+    try {
+      (container.querySelector('[aria-label="Hide details"]') || show).click();
+    } catch { /* never leave the panel stuck open */ }
+    return rows;
+  }
+
+  const domainOf = (addr) => (String(addr).split("@")[1] || "").toLowerCase().trim();
+  // Same registrable domain, or one is a subdomain of the other (po.atlassian.net
+  // signed by atlassian.net is aligned; google.com signed by evil.com is not).
+  const aligned = (a, b) =>
+    !!a && !!b && (a === b || a.endsWith("." + b) || b.endsWith("." + a));
+
+  function authHeaderLines(container, senderEmail) {
+    const a = gmailAuth(container);
+    const from = domainOf(senderEmail);
+    // Require BOTH, because trust.py treats (spf=pass AND dkim=pass) as authenticated;
+    // claiming it off one row would over-trust. Gmail omits these rows when auth fails.
+    if (!a.mailedBy || !a.signedBy || !from) return "";
+    // DKIM must align with the From domain. Otherwise an attacker spoofing
+    // "From: no-reply@google.com" while signing with their OWN domain would inherit
+    // google.com's place on the server's trusted-brand list.
+    if (!aligned(from, a.signedBy)) return "";
+    return "Authentication-Results: gmail.com; " +
+             `dkim=pass header.i=@${a.signedBy}; spf=pass smtp.mailfrom=${a.mailedBy}\n` +
+           `Received-SPF: pass (gmail.com: ${a.mailedBy} is a permitted sender)\n`;
+  }
+
   function scrape(body) {
     const container = messageContainer(body);
     const dec = legacyId(container);
@@ -64,11 +169,16 @@
     const apiMsgId = apiIdFromLegacy(dec);
     const senderNode = (container || document).querySelector(
       "span[email], .gD[email], .go span[email]");
+    const senderEmail = senderNode ? (senderNode.getAttribute("email") || "") : "";
     const sender = senderNode
-      ? `${senderNode.getAttribute("name") || ""} <${senderNode.getAttribute("email")}>`.trim()
+      ? `${senderNode.getAttribute("name") || ""} <${senderEmail}>`.trim()
       : "";
-    const text = `From: ${sender}\nSubject: ${subjectText()}\n\n${body.innerText}`;
-    return { msgId, apiMsgId, text };
+    const auth = authHeaderLines(container, senderEmail);
+    const text = `${auth}From: ${sender}\nSubject: ${subjectText()}\n\n${body.innerText}`;
+    // Fold the auth state into the cache key: if the details table hadn't rendered on
+    // an earlier scan, the background cache must not keep serving that unauthenticated
+    // verdict for the rest of the session.
+    return { msgId: msgId + (auth ? ":a" : ""), apiMsgId, text, authenticated: !!auth };
   }
 
   // ---- banner ----
@@ -185,7 +295,7 @@
     const deepOut = el("div", "pa-deep-out");
     deep.addEventListener("click", () => {
       deep.disabled = true; deep.textContent = "Scanning links…";
-      chrome.runtime.sendMessage({ type: "xray", text }, (r) => {
+      send({ type: "xray", text }, (r) => {
         deep.remove();
         if (!r || r.error || !r.data) { deepOut.textContent = "Link scan unavailable."; return; }
         deepOut.append(el("div", "pa-deep-sum", r.data.summary || ""));
@@ -231,8 +341,9 @@
 
   function analyzeBody(body) {
     const info = scrape(body);
-    chrome.runtime.sendMessage({ type: "analyze", text: info.text, msgId: info.msgId }, (r) => {
+    send({ type: "analyze", text: info.text, msgId: info.msgId }, (r) => {
       if (!body.isConnected) return;
+      if (!alive()) return;                    // extension reloaded — stay silent, don't cry offline
       if (!r || r.error) { place(body, offlineBanner()); return; }
       if (r.data) place(body, buildBanner(r.data, info.text));
     });
@@ -240,6 +351,7 @@
 
   function scanOnce() {
     if (!enabled) return;
+    if (!alive()) { teardown(); return; }
     document.querySelectorAll("div.a3s").forEach((body) => {
       if (done.has(body) || body.offsetParent === null) return;
       done.add(body);
@@ -247,8 +359,7 @@
     });
   }
 
-  let timer = null;
-  const observer = new MutationObserver(() => {
+  observer = new MutationObserver(() => {
     clearTimeout(timer);
     timer = setTimeout(scanOnce, 400);
   });

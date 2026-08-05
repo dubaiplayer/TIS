@@ -29,3 +29,6 @@ models/classifier_baseline.joblib
 
 extension/key.pem
 extension/.manifest_key.txt
+
+# Store upload package — regenerate with scripts/build_extension_zip.py
+inbox-shield.zip

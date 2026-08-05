@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Phishing Analyzer — Inbox Shield",
-  "description": "Grammarly-style phishing safety check inside Gmail. Analyzes each email you open and shows an inline verdict with the reasons behind it.",
+  "description": "Phishing safety check inside Gmail. Analyzes each email you open and shows an inline verdict with the reasons behind it.",
   "version": "1.0.0",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAw+a8sOUxMZL/e31Nrlhw4jMyo0YJ31pjfCfncfmdzydXULPbhIPiBvIsI92K7gzzZ1JxA5F5z17T1uHwdeXLLX41mzND7kqmSLWTIvBGT0frFR/GZJ0UzT3BSRMeplbVqTPy9fW9Y/+sQTe5guTbqi6/CyYijKzkJiNIYRqD+VrPnTA7GqmTUb9+HDUuY07HXO6yBxpxTTACeYEaA378v9rUV2eR/Ji7rNIsHl5sTfAnLZcmqHXzOtjHNo9YH9UtfyflHSy44mE4uoZOEmXQPLENb3Kx1YDTQvhmGxAEB6j+Wu/Ba5oW/OFdVFPftturXkFp8AbhZh11RteReAmkKQIDAQAB",
   "action": {
