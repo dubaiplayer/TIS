@@ -7,4 +7,5 @@
 # markdown verbatim and the URL would serve raw text instead of a page.
 theme: jekyll-theme-minimal
 title: Inbox Shield
-description: Phishing Analyzer — Inbox Shield: privacy policy and project documentation
+# Quoted: the value contains a colon, which YAML would otherwise read as a mapping.
+description: "Phishing Analyzer — Inbox Shield: privacy policy and project documentation"
