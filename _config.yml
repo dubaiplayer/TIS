@@ -6,6 +6,6 @@
 # the email you open). Without a theme + front matter, Jekyll would copy the
 # markdown verbatim and the URL would serve raw text instead of a page.
 theme: jekyll-theme-minimal
-title: Inbox Shield
+title: PhishingNet
 # Quoted: the value contains a colon, which YAML would otherwise read as a mapping.
-description: "Phishing Analyzer — Inbox Shield: privacy policy and project documentation"
+description: "PhishingNet: privacy policy and project documentation"

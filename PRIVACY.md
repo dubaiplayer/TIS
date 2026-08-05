@@ -1,13 +1,13 @@
 ---
 layout: default
-title: Privacy Policy — Inbox Shield
+title: Privacy Policy — PhishingNet
 ---
 
-# Privacy Policy — Phishing Analyzer (Inbox Shield)
+# Privacy Policy — PhishingNet
 
 **Last updated: August 2026**
 
-Phishing Analyzer ("Inbox Shield", the "Extension") is a browser extension that checks
+PhishingNet (the "Extension") is a browser extension that checks
 the email you are viewing in Gmail for signs of phishing and shows an inline verdict
 with the reasons behind it. This policy explains exactly what the Extension does and
 does not do with your data.
@@ -16,7 +16,7 @@ does not do with your data.
 
 When you **open an email in Gmail**, the Extension reads that single email as shown on
 the page — its **sender, subject, body text, and the links it contains** — and sends
-that text to the Phishing Analyzer service to be checked. It does this only for the
+that text to the PhishingNet analysis service to be checked. It does this only for the
 email you are currently viewing.
 
 The Extension also reads the **sender-authentication result that Gmail itself displays**
@@ -41,7 +41,7 @@ analyzer address) in your browser's extension storage.
 
 ## How your data is used
 
-The email text is sent to the Phishing Analyzer service
+The email text is sent to the PhishingNet analysis service
 (`https://phishing-analyzer-api-wq1v.onrender.com`) solely to compute a phishing
 verdict, a risk score, and the supporting evidence, which are returned to the Extension
 and displayed to you.
