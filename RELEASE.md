@@ -21,39 +21,52 @@ host permission is added, so existing users are not prompted and not disabled on
 
 ## Before you upload
 
-### 1. Verify the Outlook selectors — blocking
+### Already confirmed working (2026-08-19, consumer Outlook)
 
-The OWA selectors in `content.js` were written without a live mailbox to test against.
-If they are wrong, the extension installs fine and simply never draws a banner in
-Outlook.
+Verified from live captures on `outlook.live.com`:
 
-1. Open Outlook on the web, open a message in the reading pane.
-2. F12 → Console → paste all of `scripts/verify_outlook_selectors.js` → Enter.
-3. Repeat on a work/school account (`outlook.office.com`), a pop-out message window,
-   and a conversation with several messages expanded.
-4. Open a **different** message without reloading and run it once more.
+- The OWA selectors match a real mailbox — subject, sender and body all scrape
+  correctly, and the banner places above the message.
+- A phishing test message scores **99% / PHISHING** with the full signal breakdown,
+  attribute bars, flagged words and highlighted body all rendering.
+- A benign message scores **4% / LOOKS SAFE** — so the no-auth-header tradeoff is not
+  blowing up into obvious false positives on ordinary mail.
+- The dark-theme CSS renders correctly against Outlook's dark reading pane.
+- The grant flow works: pressing **Enable** in the popup produces banners in Outlook.
+
+That retires what was the main pre-submission risk. What follows is what is left.
+
+### 1. Still unverified: work/school Outlook
+
+The manifest claims `outlook.office.com` and `outlook.office365.com`, but only consumer
+Outlook has been tested. They share the OWA codebase so the adapter very likely works,
+and the optional permission means nobody gets it without asking.
+
+If you have access to a Microsoft 365 mailbox, open a message there and run
+`scripts/verify_outlook_selectors.js` in the console. If you do not, **ship the three
+hosts anyway** — removing them later is another review cycle, and a tenant where the
+selectors miss degrades to "no banner", never a broken page.
 
 | Result | Action |
 |---|---|
 | A `BODY` candidate matches | Good. If it isn't first in the chain, reorder `OWA_BODY` in `content.js`. |
-| No `BODY` candidate matches | Stop — the adapter would never draw a banner. |
+| No `BODY` candidate matches | The adapter draws nothing on that host — report it. |
 | `in iframe: true` | Set `allFrames: true` in `OUTLOOK_SCRIPT` in `background.js`, rebuild. |
 | `sender found: (none)` | Fine. `From:` carries a display name; no trust discount applies either way. |
-| `body id` unchanged across two messages | Expected. The identity check in `scanOnce` handles it. |
 
-### 2. Test the build unpacked
+### 2. Finish the revoke / restart tests
 
-`chrome://extensions` → Developer mode → **Load unpacked** → `extension/`. The `key`
-field in the source manifest pins the unpacked ID, so this reuses the same storage and
-permission state a real upgrading user would have.
+The grant path is confirmed; these are the paths that are not:
 
-- Gmail still banners normally, and the auth-backed verdicts still look right.
-- Popup shows the new **Outlook on the web** row reading **Enable**.
-- Press Enable, approve Chrome's prompt → an already-open Outlook tab gets a banner
-  without a reload. Then open a fresh Outlook message.
-- Press **Enabled ✓** to revoke → reloading Outlook shows no banner.
-- Quit Chrome with an Outlook tab open, relaunch, let the tab restore → banner still
-  appears (this is what `persistAcrossSessions` buys).
+- Press **Enabled ✓** in the popup to revoke → reload Outlook → no banner, and
+  `await chrome.scripting.getRegisteredContentScripts()` in the service-worker console
+  no longer lists `outlook`.
+- Revoke instead from `chrome://extensions` → PhishingNet → **Site access** → the
+  registration should disappear the same way.
+- Quit Chrome entirely with an Outlook tab open, relaunch, let the tab restore → the
+  banner still appears without a manual reload. This is what `persistAcrossSessions`
+  buys and the only way to catch it failing.
+- Confirm Gmail still banners normally with auth-backed verdicts.
 
 ### 3. Confirm no existing user gets disabled
 
@@ -72,12 +85,23 @@ Then in a **fresh Chrome profile**: load v1.2.0, touch nothing, and confirm Gmai
 `await chrome.scripting.getRegisteredContentScripts()` in the service-worker console
 returns only the `gmail` entry, and `outlook.live.com` injects nothing at all.
 
-### 4. Sanity-check the false positives
+### 4. Spot-check false positives on real transactional mail
 
-Outlook sends no auth headers, so the sender-trust discount never engages there. Run a
-few transactional messages (bank, retailer, SaaS notification) through both clients and
-compare. If Outlook flags obviously-legitimate mail, that is the known tradeoff
-surfacing — decide whether to ship anyway, soften the Outlook copy, or revisit it.
+Outlook sends no auth headers, so the sender-trust discount never engages there. A plain
+personal email already scored 4%, but the discount exists for *transactional* mail
+specifically — so open two or three real receipts or account notifications (bank,
+retailer, SaaS) in Outlook and check none of them come back PHISHING. If one does, that
+is the known tradeoff surfacing, and the call is whether to ship anyway or revisit it.
+
+### 5. Screenshots — ready
+
+`Extension Pics/store/` holds four 1280×800 PNGs: `screenshot-1` and `-2` (Gmail, from
+the first publication), `screenshot-3` (Outlook, PHISHING with details expanded) and
+`screenshot-4` (Outlook, LOOKS SAFE). Regenerate any capture with:
+
+```
+.venv\Scripts\python.exe scripts/make_store_screenshot.py "<capture>.png" -o "<dest>.png"
+```
 
 ---
 
