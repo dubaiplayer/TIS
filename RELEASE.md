@@ -16,11 +16,26 @@ and an optional-hosts block, rather than that tangled with a rename and ~150 lin
 behavior change. A pending review blocks the next upload, so v1.2.0 cannot go up until
 v1.1.0 clears.
 
+**Can you just re-upload the zip?** For v1.1.0, effectively yes — upload and submit.
+For v1.2.0, no: the package carries the code, but the **store listing description,
+screenshots, and permission justifications are dashboard fields stored outside the
+package**. A new permission with no justification filled in is a rejection.
+
+Both packages are pre-built and verified in `dist/` (gitignored):
+
+| File | Version | Upload for |
+|---|---|---|
+| `dist/phishingnet-1.1.0.zip` | 1.1.0 | Release 1 |
+| `dist/phishingnet-1.2.0.zip` | 1.2.0 | Release 2 |
+
+Dashboard: <https://chrome.google.com/webstore/devconsole> → select **PhishingNet**.
+Section names below are by function; Google renames them periodically.
+
 ---
 
 ## Release 1 — v1.1.0
 
-### Build
+### Build (already done — only if you need to rebuild)
 
 ```bash
 git checkout v1.1.0
@@ -31,6 +46,23 @@ git checkout main
 Confirm the build prints `PhishingNet v1.1.0`, and that the zip contains
 `manifest.json` at the archive root and **no** `key.pem`, `.manifest_key.txt`, or
 `README.md`.
+
+### Upload, step by step
+
+1. Dashboard → **PhishingNet** → **Package** (or "Build") → **Upload new package**.
+2. Select `dist/phishingnet-1.1.0.zip`. It must be the `.zip` itself, not the
+   `extension/` folder and not a folder containing the zip.
+3. If it rejects the version, the published version is already ≥ 1.1.0 — check the
+   listing's current version before rebuilding.
+4. Go to **Store listing**. The name now reads **PhishingNet**; update the title there
+   if it still shows "Phishing Analyzer — Inbox Shield". Leave the description alone
+   for this release.
+5. **Privacy practices** — nothing changes. Confirm the policy URL is still
+   `https://dubaiplayer.github.io/TIS/PRIVACY` and the three data-use certifications
+   are still ticked. If the form shows any field as newly required, fill it now.
+6. **Submit for review**, pasting the version notes below.
+7. Any tab showing an incomplete-field warning blocks submission — the button greys
+   out until every required field on every tab is filled.
 
 ### Test before uploading
 
@@ -125,16 +157,38 @@ Check `await chrome.scripting.getRegisteredContentScripts()` after each step:
 - Sign a second Chrome profile into the same account → the popup there reads
   **Enable**, not "Enabled ✓" (permissions do not sync; nothing leaked into storage).
 
-### Build and draft-upload
+### Upload, step by step
 
-```bash
-python scripts/build_extension_zip.py     # must print PhishingNet v1.2.0
-```
+Do these **in order**. Uploading the package last would mean filling justifications for
+permissions the dashboard doesn't know about yet.
 
-Upload it as a **draft** and do not submit yet. The dashboard shows the newly requested
-permissions; confirm there is no "requires user re-authorization" banner. A draft
-reaches no users and can be deleted or overwritten freely. This is the definitive check
-— a local unpacked reload auto-grants permissions and proves nothing.
+1. **Package → Upload new package** → `dist/phishingnet-1.2.0.zip`.
+   This creates a **draft**. Nothing reaches users until you press Submit, and a draft
+   can be overwritten or discarded freely.
+2. **Stop and read the permissions warning.** After upload the dashboard lists the newly
+   requested permissions. You should see `scripting` and the three optional Outlook
+   hosts, and you should **not** see any banner saying the update requires existing
+   users to re-authorize or that it will be disabled for them. If you do see one,
+   discard the draft and stop — that is the failure mode this whole design exists to
+   avoid, and shipping it would disable the extension for every current user.
+3. **Store listing → Description.** This is a dashboard field, independent of the
+   manifest — it does not update itself when you upload a package. Replace the
+   Gmail-only text so it names both clients (the 128-char string above is a drop-in, or
+   write longer copy; the listing field allows far more than the manifest's 132).
+4. **Store listing → Screenshots.** Add at least one Outlook screenshot (banner over a
+   message on `outlook.live.com`) and ideally one of the popup showing the **Enable**
+   control. A description claiming Outlook with only Gmail screenshots is a recognized
+   rejection reason.
+5. **Privacy practices → Single purpose** — replace with the text below.
+6. **Privacy practices → Permission justifications.** Two new boxes will have appeared,
+   for `scripting` and for the optional host permissions. Both are required; paste the
+   text below. Leave the existing `storage` and analyzer-host justifications as they
+   are unless the form has cleared them.
+7. **Privacy practices → Data usage.** Keep "personal communications" declared and
+   re-tick the three certifications if the form reset them. Nothing about the data flow
+   changed.
+8. **Privacy policy URL** — unchanged and already live with the new Outlook wording.
+9. **Submit for review**, pasting the reviewer version notes below.
 
 ### Listing fields to update
 
