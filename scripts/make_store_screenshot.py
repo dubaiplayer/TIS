@@ -24,10 +24,36 @@ except ImportError:
              "  .venv\\Scripts\\python.exe scripts/make_store_screenshot.py <file>")
 
 BACKGROUNDS = {
+    "auto": None,               # sample the image's own border -- see edge_colour()
     "white": (255, 255, 255),
     "light": (241, 243, 244),   # Gmail/Outlook chrome grey
     "dark": (32, 33, 36),
 }
+
+
+def edge_colour(im):
+    """The most common colour around the image's border.
+
+    Padding a dark-theme capture with white frames it in a way that reads as a
+    mistake, and mail clients differ in exactly how dark they are -- Outlook's dark
+    reading pane and its dark message surface are not the same grey. Sampling the
+    border makes the padding continue whatever the capture already had, so the seam
+    disappears without anyone having to name a colour.
+    """
+    w, h = im.size
+    px = im.load()
+    step = max(1, min(w, h) // 100)
+    edge = []
+    for x in range(0, w, step):
+        edge.append(px[x, 0])
+        edge.append(px[x, h - 1])
+    for y in range(0, h, step):
+        edge.append(px[0, y])
+        edge.append(px[w - 1, y])
+    counts = {}
+    for c in edge:
+        counts[c] = counts.get(c, 0) + 1
+    return max(counts.items(), key=lambda kv: kv[1])[0]
 
 
 def main():
@@ -36,8 +62,9 @@ def main():
     ap.add_argument("image", help="the raw screenshot (PNG or JPEG)")
     ap.add_argument("--size", default="1280x800",
                     help="target size, 1280x800 (default) or 640x400")
-    ap.add_argument("--bg", default="light", choices=sorted(BACKGROUNDS),
-                    help="padding colour (default: light)")
+    ap.add_argument("--bg", default="auto", choices=sorted(BACKGROUNDS),
+                    help="padding colour; 'auto' (default) matches the image's own edge")
+    ap.add_argument("-o", "--out", help="output path (default: <name>-store.png)")
     args = ap.parse_args()
 
     if args.size not in ("1280x800", "640x400"):
@@ -58,16 +85,17 @@ def main():
     new = (max(1, round(src.width * ratio)), max(1, round(src.height * ratio)))
     resized = src.resize(new, Image.LANCZOS)
 
-    canvas = Image.new("RGB", (tw, th), BACKGROUNDS[args.bg])
+    bg = edge_colour(src) if args.bg == "auto" else BACKGROUNDS[args.bg]
+    canvas = Image.new("RGB", (tw, th), bg)
     canvas.paste(resized, ((tw - new[0]) // 2, (th - new[1]) // 2))
 
-    root, _ = os.path.splitext(args.image)
-    out = root + "-store.png"
+    out = args.out or (os.path.splitext(args.image)[0] + "-store.png")
+    os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
     canvas.save(out, "PNG")
 
     print("in  : %s  (%dx%d)" % (args.image, src.width, src.height))
-    print("out : %s  (%dx%d, content %dx%d, %s padding)"
-          % (out, tw, th, new[0], new[1], args.bg))
+    print("out : %s  (%dx%d, content %dx%d, padding rgb%s)"
+          % (out, tw, th, new[0], new[1], bg))
     if ratio < 1.0:
         print("note: scaled to %.0f%% to fit." % (ratio * 100))
     if new[0] < tw * 0.6 and new[1] < th * 0.6:
