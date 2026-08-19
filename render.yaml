@@ -4,7 +4,7 @@ services:
   - type: web
     name: phishing-analyzer-api
     runtime: python
-    plan: free
+    plan: starter
     buildCommand: pip install -r requirements-service.txt
     startCommand: uvicorn server.app:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
