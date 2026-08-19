@@ -31,7 +31,7 @@
 </head>
 <body>
   <h1>🛡️ PhishingNet</h1>
-  <div class="sub">Phishing safety check inside Gmail</div>
+  <div class="sub">Phishing safety check inside Gmail &amp; Outlook</div>
 
   <div class="row">
     <label for="enabled">Scan emails automatically</label>
@@ -43,11 +43,17 @@
     <input type="text" id="apiBase" placeholder="https://phishing-analyzer-api-wq1v.onrender.com" />
   </div>
 
+  <div class="row">
+    <label for="outlookBtn">Outlook on the web</label>
+    <button id="outlookBtn" class="gbtn" disabled>…</button>
+  </div>
+  <div id="outlookHint" class="ghint"></div>
+
   <div class="status"><span id="dot" class="dot off"></span><span id="statusText">checking…</span></div>
 
   <div class="note">The email you open is sent to the <b>Phishing Analyzer</b> service
     (the URL above) to be checked for phishing, and is not stored. Open an email in
-    Gmail to see a verdict.</div>
+    Gmail — or in Outlook, once enabled above — to see a verdict.</div>
 
   <script src="popup.js"></script>
 </body>
