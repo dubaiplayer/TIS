@@ -1,60 +1,64 @@
-# Inbox Shield — phishing safety inside Gmail
+# PhishingNet — phishing safety inside Gmail and Outlook
 
-A Chrome/Edge (Manifest V3) extension that checks every email you open in Gmail with
-your **local Phishing Analyzer** and shows an inline safety banner — like Grammarly,
-but for phishing. Email content is sent only to your own machine (`localhost:8008`);
-nothing leaves your computer.
+A Chrome/Edge (Manifest V3) extension that checks every email you open and shows an
+inline safety banner — like Grammarly, but for phishing. It works in **Gmail** out of
+the box, and in **Outlook on the web** once you turn that on in the popup.
+
+Email text is sent to the hosted Phishing Analyzer service
+(`https://phishing-analyzer-api-wq1v.onrender.com` by default, configurable in the
+popup) to be scored, and is not stored there. See `../PRIVACY.md`.
 
 ## What it does
-- Opens an email → a slim banner appears above the message body:
+- Open an email → a slim banner appears above the message body:
   ✓ **LOOKS SAFE** (green) · ⚠️ **SUSPICIOUS** (amber) · ⛔ **PHISHING** (red), with the risk %.
 - **Details ▾** expands to the recommended action, top signals, and the evidence that fired.
 - **🔗 Deep scan** runs Link X-ray on the email's links (redirects, destination domain,
   domain age, blocklist hits).
+- While the analyzer is cold-starting the banner says so and keeps retrying, rather than
+  reporting the service down.
 
-## Run it (basic — no Google setup)
-1. Start the analyzer backend from the project root:
-   ```
-   .venv\Scripts\python.exe -m uvicorn server.app:app --host 127.0.0.1 --port 8008
-   ```
-2. In Chrome/Edge open `chrome://extensions`, turn on **Developer mode** (top-right).
-3. **Load unpacked** → select this `extension/` folder.
-4. Open **Gmail** and open any email — the banner appears. Click the 🛡️ toolbar icon
-   for settings (on/off, analyzer URL, backend status).
+## Run it unpacked
+1. In Chrome/Edge open `chrome://extensions`, turn on **Developer mode** (top-right).
+2. **Load unpacked** → select this `extension/` folder.
+3. Open Gmail and open any email — the banner appears. Click the 🛡️ toolbar icon for
+   settings (scanning on/off, analyzer URL, Outlook support, backend status).
 
-In this mode the extension analyzes the **visible text** (sender, subject, body). That's
-enough for most phishing, but the header-based checks (sender authentication, domain
-age) can't run without the raw headers — so turn on **header-accurate mode** below.
+To run against a local backend instead, start it from the project root and put its
+address in the popup's **Analyzer URL** field:
 
-## Header-accurate mode (optional — Gmail API via OAuth)
-This lets the extension pull the **raw message including headers** (`Authentication-Results`,
-`List-Unsubscribe`, …) so the sender-auth / domain-age trust discount works — the same
-accuracy as pasting "Show original" into the app.
+```
+.venv\Scripts\python.exe -m uvicorn server.app:app --host 127.0.0.1 --port 8008
+```
 
-This extension has a **fixed ID**: `oaccmpcmfggkbhbhcbohkcphllnkachp` (set by the `key`
-in `manifest.json`).
+The extension has a **fixed unpacked ID** — `oaccmpcmfggkbhbhcbohkcphllnkachp` — pinned
+by the `key` field in `manifest.json`. `scripts/build_extension_zip.py` strips that field
+from the store package, so the published extension has a different, store-assigned ID.
 
-1. In **Google Cloud Console** (console.cloud.google.com) → the project you used before:
-   - **APIs & Services → Library → Gmail API → Enable**.
-   - **OAuth consent screen**: External, add the `.../auth/gmail.readonly` scope, and add
-     your Gmail under **Test users**.
-   - **Credentials → Create credentials → OAuth client ID → Application type: Chrome
-     Extension** (older UIs: "Chrome App"). For **Item/Application ID**, paste
-     `oaccmpcmfggkbhbhcbohkcphllnkachp`. Create it and copy the **Client ID**.
-2. In `manifest.json`, replace `oauth2.client_id`
-   (`REPLACE_WITH_YOUR_CHROME_EXTENSION_OAUTH_CLIENT_ID...`) with that Client ID.
-3. Reload the extension (`chrome://extensions` → ⟳). Open the popup → **Connect Gmail**
-   → approve. Banners now say "Analyzed full message incl. headers."
+## How the two clients are wired
 
-If you skip this, everything still works on visible-text mode; the banner just notes it.
+Gmail is a **static `content_scripts` block**. Outlook is **not**, and deliberately so: a
+match pattern in the manifest is a required host permission, and adding one to a
+published extension makes Chrome disable it for every existing user until each of them
+re-accepts the warning. So Outlook lives in `optional_host_permissions`, is granted from
+the popup, and its content script is registered at runtime by `background.js`
+(`reconcileOutlook`). The permission is the source of truth; the registration mirrors it.
+
+`content.js` serves both. Everything below its adapter block — banner building, the
+cold-start retry machine — is client-agnostic; only finding, scraping and placing differ.
 
 ## Notes & limits
-- **Backend must be running** — the extension talks only to your local analyzer, which
-  keeps your email on-device (the Gmail API call is Google → your browser only).
-- Gmail's page markup is obfuscated and changes over time; the DOM selectors are
-  best-effort and used to (a) find the open message and (b) fall back when
-  header-accurate mode is off. A missed parse just means no banner — it never breaks
+- **Gmail gets a sender-authentication signal; Outlook does not.** In Gmail the extension
+  reads the "mailed-by" / "signed-by" values Gmail displays under *Show details* and
+  forwards them as RFC822 auth headers, which lets the analyzer's sender-trust discount
+  clear genuine transactional mail. Outlook on the web shows no equivalent in the reading
+  pane, so the Outlook path sends message text alone — **expect more false positives on
+  legitimate transactional mail in Outlook than in Gmail.**
+- Both clients obfuscate their page markup and change it over time. The DOM selectors are
+  best-effort; the Outlook ones key off ARIA roles and id prefixes rather than class
+  names, and walk a fallback chain. A missed parse just means no banner — it never breaks
   the page.
-- MVP targets Gmail web only. Outlook web and compose-time warnings are future work.
-- `key.pem` (the private key that pins the extension ID) is kept locally and gitignored;
+- Outlook has no stable per-message id, so the background cache is keyed on a content
+  fingerprint widened with sender and subject. Gmail uses its real message id.
+- Compose-time warnings are still future work.
+- `key.pem` (the private key that pins the unpacked ID) is kept locally and gitignored;
   the public half lives in `manifest.json` as `key`.
