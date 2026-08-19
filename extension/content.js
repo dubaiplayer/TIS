@@ -323,13 +323,48 @@
     return wrap;
   }
 
-  function offlineBanner() {
+  // A sleeping host is not a broken one: say so, and keep the banner honest about
+  // how long the wait has run so a 40s cold start doesn't read as a hang.
+  function wakingBanner(startedAt) {
+    const wrap = el("div", "pa-banner pa-waking");
+    const head = el("div", "pa-head");
+    head.append(el("span", "pa-icon pa-spin", "◐"));
+    head.append(el("span", "pa-title", "WAKING ANALYZER"));
+    const sum = el("span", "pa-summary", "");
+    head.append(sum);
+    wrap.append(head);
+    const tick = () => {
+      if (!wrap.isConnected) { clearInterval(iv); return; }   // replaced or closed
+      const s = Math.round((Date.now() - startedAt) / 1000);
+      sum.textContent =
+        `The service was idle and is starting up (${s}s) — this usually takes 30-60 seconds.`;
+    };
+    const iv = setInterval(tick, 1000);
+    tick();
+    return wrap;
+  }
+
+  // Terminal failure. "suspended" is worth its own wording: retrying cannot fix it,
+  // so point at what can, rather than inviting the user to wait it out.
+  function failureBanner(state, onRetry) {
+    const suspended = state === "suspended";
     const wrap = el("div", "pa-banner pa-offline");
     const head = el("div", "pa-head");
     head.append(el("span", "pa-icon", "○"));
-    head.append(el("span", "pa-title", "Analyzer unavailable"));
-    head.append(el("span", "pa-summary",
-      "Couldn't reach the Phishing Analyzer service — please try again in a moment."));
+    head.append(el("span", "pa-title",
+      suspended ? "Analyzer suspended" : "Analyzer unavailable"));
+    head.append(el("span", "pa-summary", suspended
+      ? "The hosted service is suspended and can't be woken from here. Point the "
+        + "extension at another analyzer URL from the toolbar popup, or restore the host."
+      : state === "offline"
+      ? "No network connection — the email wasn't checked."
+      : "Couldn't reach the Phishing Analyzer service — please try again in a moment."));
+    head.append(el("span", "pa-spacer"));
+    if (!suspended) {
+      const retry = el("button", "pa-btn", "Try again");
+      retry.addEventListener("click", onRetry);
+      head.append(retry);
+    }
     wrap.append(head);
     return wrap;
   }
@@ -339,14 +374,44 @@
   // ---- scan loop ----
   const done = new WeakSet();
 
+  // Cold starts are the common case on an idle free-tier host, so a single timeout
+  // is not a verdict. Keep re-asking within this budget, showing progress, and only
+  // then call it a failure.
+  const WAKE_BUDGET_MS = 90000;
+  const WAKE_RETRY_MS = 6000;
+
   function analyzeBody(body) {
     const info = scrape(body);
-    send({ type: "analyze", text: info.text, msgId: info.msgId }, (r) => {
-      if (!body.isConnected) return;
-      if (!alive()) return;                    // extension reloaded — stay silent, don't cry offline
-      if (!r || r.error) { place(body, offlineBanner()); return; }
-      if (r.data) place(body, buildBanner(r.data, info.text));
-    });
+    let shown = null;                          // the banner we've inserted, if any
+
+    // One banner per message: swap in place so a wake -> verdict transition doesn't
+    // stack notices above the email.
+    const render = (node) => {
+      if (shown && shown.isConnected) shown.replaceWith(node);
+      else place(body, node);
+      shown = node;
+    };
+
+    const run = () => {
+      const started = Date.now();
+      const attempt = () => {
+        send({ type: "analyze", text: info.text, msgId: info.msgId }, (r) => {
+          if (!body.isConnected) return;
+          if (!alive()) return;                // extension reloaded — stay silent, don't cry offline
+          if (r && r.data) { render(buildBanner(r.data, info.text)); return; }
+          const state = (r && r.state) || "offline";
+          if (state === "waking" && Date.now() - started < WAKE_BUDGET_MS) {
+            if (!(shown && shown.classList.contains("pa-waking")))
+              render(wakingBanner(started));
+            setTimeout(attempt, WAKE_RETRY_MS);
+            return;
+          }
+          render(failureBanner(state, run));   // "Try again" restarts the whole budget
+        });
+      };
+      attempt();
+    };
+    run();
   }
 
   function scanOnce() {
@@ -364,5 +429,6 @@
     timer = setTimeout(scanOnce, 400);
   });
   observer.observe(document.body, { childList: true, subtree: true });
+  send({ type: "warm" }, () => {});   // overlap the host's cold start with Gmail loading
   setTimeout(scanOnce, 1200);
 })();

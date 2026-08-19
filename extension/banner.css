@@ -19,6 +19,7 @@
 .pa-suspicious { border-left-color: #f59e0b !important; background: #fffaf0 !important; }
 .pa-legitimate { border-left-color: #22c55e !important; background: #f4fdf7 !important; }
 .pa-offline    { border-left-color: #9aa0a6 !important; background: #f8f9fa !important; }
+.pa-waking     { border-left-color: #1a73e8 !important; background: #f6f9ff !important; }
 
 .pa-head { display: flex !important; align-items: center !important; gap: 8px !important;
            flex-wrap: wrap !important; }
@@ -28,6 +29,9 @@
 .pa-suspicious .pa-title { color: #b45309 !important; }
 .pa-legitimate .pa-title { color: #15803d !important; }
 .pa-offline    .pa-title { color: #5f6368 !important; }
+.pa-waking     .pa-title { color: #1a56c4 !important; }
+.pa-spin { display: inline-block !important; animation: pa-spin 1.1s linear infinite !important; }
+@keyframes pa-spin { to { transform: rotate(360deg); } }
 .pa-summary { font-size: 12.5px !important; color: #5f6368 !important; flex: 1 1 auto !important;
               min-width: 120px !important; }
 .pa-spacer { flex: 1 1 auto !important; }

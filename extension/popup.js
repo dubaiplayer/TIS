@@ -3,12 +3,22 @@ const apiEl = document.getElementById("apiBase");
 const dot = document.getElementById("dot");
 const statusText = document.getElementById("statusText");
 
+// The health probe doubles as a wake-up: a sleeping host starts on this request,
+// so "asleep" is reported as a normal state to wait through, not a fault.
+const STATUS = {
+  up:        ["on",   "Analyzer online"],
+  waking:    ["wake", "Analyzer asleep — starting up, ready in 30-60s"],
+  suspended: ["off",  "Analyzer suspended — the hosted service isn't running"],
+  offline:   ["off",  "No network connection"],
+};
+
 function checkHealth() {
-  dot.className = "dot off"; statusText.textContent = "checking…";
+  dot.className = "dot wake"; statusText.textContent = "checking…";
   chrome.runtime.sendMessage({ type: "health" }, (r) => {
-    const online = r && r.online;
-    dot.className = "dot " + (online ? "on" : "off");
-    statusText.textContent = online ? "Analyzer online" : "Analyzer unreachable — try again shortly";
+    const [cls, text] = STATUS[(r && (r.online ? "up" : r.state)) || "offline"]
+      || ["off", "Analyzer unreachable — check the URL above"];
+    dot.className = "dot " + cls;
+    statusText.textContent = text;
   });
 }
 
