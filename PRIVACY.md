@@ -7,33 +7,37 @@ title: Privacy Policy — PhishingNet
 
 **Last updated: August 2026**
 
-PhishingNet (the "Extension") is a browser extension that checks
-the email you are viewing in Gmail for signs of phishing and shows an inline verdict
-with the reasons behind it. This policy explains exactly what the Extension does and
-does not do with your data.
+PhishingNet (the "Extension") is a browser extension that checks the email you are
+viewing in **Gmail** — and, if you choose to turn it on, in **Outlook on the web**
+— for signs of phishing, and shows an inline verdict with the reasons behind it.
+This policy explains exactly what the Extension does and does not do with your data.
 
 ## What the Extension accesses
 
-When you **open an email in Gmail**, the Extension reads that single email as shown on
-the page — its **sender, subject, body text, and the links it contains** — and sends
-that text to the PhishingNet analysis service to be checked. It does this only for the
-email you are currently viewing.
+When you **open an email in Gmail** — or in **Outlook on the web**, if you have
+turned that on — the Extension reads that single email as shown on the page: its
+**sender, subject, body text, and the links it contains**. It sends that text to the
+PhishingNet analysis service to be checked. It does this only for the email you are
+currently viewing.
 
-The Extension also reads the **sender-authentication result that Gmail itself displays**
-for that message (the "mailed-by" and "signed-by" values shown under *Show details*), and
-sends it along with the text. This is Gmail's own verification of whether the message
-genuinely came from the domain it claims, and it lets the analyzer avoid wrongly flagging
-legitimate mail from banks, retailers, and other services. It is read from Gmail's own
-interface — the Extension does not perform any authentication check of its own, and does
-not access your account to obtain it.
+**In Gmail only**, the Extension also reads the **sender-authentication result that
+Gmail itself displays** for that message (the "mailed-by" and "signed-by" values shown
+under *Show details*), and sends it along with the text. This is Gmail's own
+verification of whether the message genuinely came from the domain it claims, and it
+lets the analyzer avoid wrongly flagging legitimate mail from banks, retailers, and
+other services. It is read from Gmail's own interface — the Extension does not perform
+any authentication check of its own, and does not access your account to obtain it.
+
+In **Outlook on the web** the Extension reads **no** authentication data of any kind.
+It sends the visible message text only.
 
 The Extension also stores your **settings** (whether automatic scanning is on, and the
 analyzer address) in your browser's extension storage.
 
 ## What the Extension does NOT do
 
-- It does **not** sign in to your Google account, and it does **not** use your Google
-  credentials.
+- It does **not** sign in to your Google or Microsoft account, and it does **not** use
+  your Google or Microsoft credentials.
 - It does **not** read, download, or scan your whole mailbox — only the message
   currently open on screen.
 - It does **not** track your browsing, and it contains **no advertising or analytics**.
@@ -56,13 +60,25 @@ and displayed to you.
 
 - **`storage`** — to save your settings (scanning on/off, analyzer address).
 - **Access to `mail.google.com`** (content script) — to read the email you have open
-  and to display the safety banner inside Gmail.
+  and to display the safety banner inside Gmail. This access is granted when you
+  install the Extension.
+- **Optional access to `outlook.live.com`, `outlook.office.com` and
+  `outlook.office365.com`** — the same reading and banner display inside Outlook on
+  the web. This access is **optional and off by default**. It is requested only when
+  you press **Enable** next to *Outlook on the web* in the Extension's popup and
+  approve Chrome's own prompt, and you can withdraw it at any time from that same
+  button or from `chrome://extensions` → *PhishingNet* → *Site access*. Until you
+  grant it, the Extension does not run on, and reads nothing from, any Outlook page.
+- **`scripting`** — to install the reader into Outlook pages after you have granted
+  that optional access. It gives the Extension no access to any site it does not
+  already have your permission for.
 - **Access to the analyzer service host** — to send the email text for analysis and
   receive the verdict.
 
 ## Your choices
 
-You can turn automatic scanning off at any time from the Extension's popup, change the
+You can turn automatic scanning off at any time from the Extension's popup, turn
+Outlook support off (which withdraws the Outlook permission entirely), change the
 analyzer address, or remove the Extension from your browser to stop all processing.
 
 ## Children
