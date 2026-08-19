@@ -101,3 +101,49 @@
 .pa-link-url { color: #5f6368 !important; }
 .pa-link-dest { color: #202124 !important; }
 .pa-link-why { color: #b91c1c !important; margin-top: 2px !important; }
+
+/* Dark theme. Gmail and Outlook both offer one, and the palette above is light-only --
+   a #fff card on a dark reading pane is the first thing anyone notices.
+
+   Caveat worth knowing: Outlook's in-app theme switcher is an application setting and
+   does NOT change prefers-color-scheme. A user on an OS light theme who has switched
+   Outlook to dark still gets the light banner. Matching that properly means sampling the
+   host page's background, which is a bigger change than it looks (the root sets
+   `all: initial`, so nothing inherits). This covers the common case -- OS-level dark --
+   and is the pragmatic first step. */
+@media (prefers-color-scheme: dark) {
+  .pa-banner { background: #1f2023 !important; border-color: #3c4043 !important;
+               color: #e8eaed !important; }
+
+  .pa-phishing   { background: #2a1d1d !important; }
+  .pa-suspicious { background: #2a2419 !important; }
+  .pa-legitimate { background: #1a2620 !important; }
+  .pa-offline    { background: #232427 !important; }
+  .pa-waking     { background: #1c2430 !important; }
+
+  .pa-phishing   .pa-title { color: #f87171 !important; }
+  .pa-suspicious .pa-title { color: #fbbf24 !important; }
+  .pa-legitimate .pa-title { color: #4ade80 !important; }
+  .pa-offline    .pa-title { color: #9aa0a6 !important; }
+  .pa-waking     .pa-title { color: #8ab4f8 !important; }
+
+  .pa-summary, .pa-chips-label, .pa-bar-val { color: #9aa0a6 !important; }
+  .pa-reco, .pa-section-h { color: #e8eaed !important; }
+  .pa-evidence, .pa-bar-name { color: #bdc1c6 !important; }
+  .pa-muted, .pa-src, .pa-x { color: #80868b !important; }
+
+  .pa-btn { color: #8ab4f8 !important; }
+  .pa-btn:hover { background: rgba(138, 180, 248, 0.12) !important; }
+
+  .pa-body { border-top-color: #3c4043 !important; }
+  .pa-chip { background: #303134 !important; color: #bdc1c6 !important; }
+  .pa-bar-track { background: #303134 !important; }
+
+  /* The X-ray excerpt. .pa-mark keeps its dark text: its highlight colour is set inline
+     and stays a light tint, so dark-on-tint remains the readable pairing. */
+  .pa-hl { background: #17181a !important; border-color: #3c4043 !important;
+           color: #bdc1c6 !important; }
+
+  .pa-kw-phish { background: rgba(248, 113, 113, 0.18) !important; color: #f87171 !important; }
+  .pa-kw-legit { background: rgba(74, 222, 128, 0.18) !important; color: #4ade80 !important; }
+}

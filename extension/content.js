@@ -1,10 +1,28 @@
-// Inbox Shield — reads the open Gmail message and drops a safety banner above the body.
-// Scrapes the message from the DOM and, where Gmail exposes its own SPF/DKIM verdict
-// ("mailed-by" / "signed-by"), forwards that as RFC822 auth headers so the analyzer's
-// sender-trust discount can clear genuine transactional mail. No OAuth scope needed.
+// PhishingNet — reads the open message and drops a safety banner above the body.
+// Serves Gmail and Outlook on the web from one script: everything below the adapter
+// block (banner building, the cold-start retry machine) is client-agnostic, and only
+// finding, scraping and placing differ between the two.
+// Where Gmail exposes its own SPF/DKIM verdict ("mailed-by" / "signed-by") that is
+// forwarded as RFC822 auth headers so the analyzer's sender-trust discount can clear
+// genuine transactional mail. Outlook shows no such verdict in the reading pane, so it
+// sends message text alone — see owaScrape.
 // Defensive throughout: any parse miss just means "no banner", never a broken page.
 (() => {
   "use strict";
+
+  // The registered content script and the one-off executeScript that reaches tabs
+  // already open when Outlook was enabled can both land in the same frame. A second
+  // instance would attach a second observer and stack duplicate banners. This window
+  // is the isolated world's, so the flag is invisible to the page.
+  if (window.__phishingNetLoaded) return;
+  window.__phishingNetLoaded = true;
+
+  // One script, two clients — bail on anything else. executeScript can only reach a
+  // host the user has granted, but fail closed rather than assume that.
+  const HOST = location.hostname === "mail.google.com" ? "gmail"
+             : /^outlook\.(live|office|office365)\.com$/.test(location.hostname) ? "outlook"
+             : null;
+  if (!HOST) return;
 
   const VERDICT = {
     phishing:   { label: "PHISHING",   cls: "pa-phishing",   icon: "⛔" },
@@ -371,8 +389,105 @@
 
   function place(body, node) { body.parentElement.insertBefore(node, body); }
 
+  // The scan loop needs a cheap identity per node to notice a recycled one, and it
+  // runs on every mutation — so it must NOT go through scrape(), which on Gmail
+  // clicks the details caret open and shut.
+  function gmailIdentify(body) { return legacyId(messageContainer(body)); }
+
+  function gmailFindBodies() { return document.querySelectorAll("div.a3s"); }
+
+  // ---- Outlook Web scraping ----
+  // OWA obfuscates its class names and churns them, so key off ARIA roles and id
+  // prefixes, which have held far better, and walk a fallback chain rather than
+  // pinning one selector. Every selector here is best-effort; a miss means no banner.
+  const OWA_BODY = [
+    'div[id^="UniqueMessageBody"]',
+    '[aria-label="Message body"]',
+    'div[role="document"]',
+  ];
+
+  function owaFindBodies() {
+    for (const sel of OWA_BODY) {
+      const hit = document.querySelectorAll(sel);
+      if (hit.length) return hit;
+    }
+    return [];
+  }
+
+  // Scope the sender lookup to the message, not the page: a conversation view stacks
+  // several messages and the wrong header would attribute the wrong sender.
+  function owaContainer(body) {
+    return body.closest('[role="listitem"], [data-convid], [role="document"]')
+        || body.parentElement || document;
+  }
+
+  function owaSubject() {
+    const h = document.querySelector('[role="heading"][aria-level="2"]');
+    if (h && h.innerText.trim()) return h.innerText.trim();
+    // OWA titles read "Subject - Account name - Outlook"; drop the trailing two.
+    return (document.title || "")
+      .replace(/\s*-\s*Outlook\s*$/i, "").replace(/\s*-\s*[^-]+$/, "").trim();
+  }
+
+  // OWA usually renders the sender as a display name with the address only in the
+  // title attribute, so read that and take the first thing shaped like an address.
+  function owaSender(scope) {
+    const nodes = (scope || document).querySelectorAll('[title*="@"]');
+    for (const n of nodes) {
+      const m = (n.getAttribute("title") || "")
+        .match(/[^\s<>()[\]:;@,"]+@[^\s<>()[\]:;@,"]+\.[a-z]{2,}/i);
+      if (m) return { email: m[0].toLowerCase(), name: (n.innerText || "").trim() };
+    }
+    return { email: "", name: "" };
+  }
+
+  // OWA reuses its body-node ids (UniqueMessageBody_<counter>) across messages, so
+  // there is no stable per-message id to key the background cache on. Widen the
+  // content fingerprint with sender and subject: length-plus-prefix alone collides on
+  // templated mail from one sender, and a collision here would show the WRONG verdict
+  // on a real email.
+  const fingerprintId = (who, subject, text) =>
+    "fp:" + text.length + ":" + who + ":" + subject + ":" + text.slice(0, 64);
+
+  function owaIdentify(body) {
+    const t = body.innerText || "";
+    return t.length + ":" + t.slice(0, 64);
+  }
+
+  function owaScrape(body) {
+    const { email, name } = owaSender(owaContainer(body));
+    const subject = owaSubject();
+    const bodyText = body.innerText || "";
+    // No auth headers. Outlook does not render its SPF/DKIM verdict anywhere the
+    // reading pane can be read without opening a dialog, so the server's sender-trust
+    // discount never engages here and legitimate transactional mail is judged on
+    // wording alone — it will score more harshly than the same message in Gmail.
+    // A From: line carrying only a display name is harmless: trust.py derives no
+    // domain from it and applies no discount, which is already the outcome here.
+    const sender = email ? `${name} <${email}>`.trim() : name;
+    const text = `From: ${sender}\nSubject: ${subject}\n\n${bodyText}`;
+    return { msgId: fingerprintId(email || name, subject, bodyText), text };
+  }
+
+  function owaPlace(body, node) {
+    // Keep the banner inside the scrolled region, directly above the message.
+    const anchor = body.closest('[role="document"]') || body;
+    const parent = anchor.parentElement;
+    if (parent) parent.insertBefore(node, anchor);
+    else body.insertBefore(node, body.firstChild);
+  }
+
+  // ---- client selection ----
+  const ADAPTERS = {
+    gmail:   { findBodies: gmailFindBodies, identify: gmailIdentify, scrape, place },
+    outlook: { findBodies: owaFindBodies, identify: owaIdentify,
+               scrape: owaScrape, place: owaPlace },
+  };
+  const CLIENT = ADAPTERS[HOST];
+
   // ---- scan loop ----
-  const done = new WeakSet();
+  const seen = new WeakMap();      // body node -> the message identity we analyzed it as
+  const banners = new WeakMap();   // body node -> the banner currently shown for it
 
   // Cold starts are the common case on an idle free-tier host, so a single timeout
   // is not a verdict. Keep re-asking within this budget, showing progress, and only
@@ -381,15 +496,22 @@
   const WAKE_RETRY_MS = 6000;
 
   function analyzeBody(body) {
-    const info = scrape(body);
+    const info = CLIENT.scrape(body);
     let shown = null;                          // the banner we've inserted, if any
 
     // One banner per message: swap in place so a wake -> verdict transition doesn't
     // stack notices above the email.
     const render = (node) => {
       if (shown && shown.isConnected) shown.replaceWith(node);
-      else place(body, node);
+      else {
+        // Outlook recycles reading-pane nodes, so this one may still carry the banner
+        // of the message it held before. Drop that or the two stack above the email.
+        const stale = banners.get(body);
+        if (stale && stale.isConnected) stale.remove();
+        CLIENT.place(body, node);
+      }
       shown = node;
+      banners.set(body, node);
     };
 
     const run = () => {
@@ -417,9 +539,14 @@
   function scanOnce() {
     if (!enabled) return;
     if (!alive()) { teardown(); return; }
-    document.querySelectorAll("div.a3s").forEach((body) => {
-      if (done.has(body) || body.offsetParent === null) return;
-      done.add(body);
+    CLIENT.findBodies().forEach((body) => {
+      if (body.offsetParent === null) return;   // collapsed — revisit when expanded
+      // Keyed on identity, not the node alone: Gmail builds a fresh node per message,
+      // but Outlook recycles them, so "already analyzed this node" would silently skip
+      // the next message to land in it. On Gmail the id is stable, so this is inert.
+      const id = CLIENT.identify(body);
+      if (seen.get(body) === id) return;
+      seen.set(body, id);
       analyzeBody(body);
     });
   }
@@ -429,6 +556,6 @@
     timer = setTimeout(scanOnce, 400);
   });
   observer.observe(document.body, { childList: true, subtree: true });
-  send({ type: "warm" }, () => {});   // overlap the host's cold start with Gmail loading
+  send({ type: "warm" }, () => {});   // overlap the host's cold start with page load
   setTimeout(scanOnce, 1200);
 })();
